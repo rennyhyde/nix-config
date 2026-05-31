@@ -18,7 +18,12 @@
     git
     curl
     wget
-    #vscode
+  ];
+
+  environment.systemPath = [
+  	"/opt/homebrew/bin"
+  	"/opt/homebrew/sbin"
+ 	  "/Library/TeX/texbin"
   ];
 
   # Use zsh as the default shell
@@ -32,12 +37,14 @@
       tilesize = 48;
       appswitcher-all-displays = true;
       magnification = false;
+      expose-animation-duration = 0.2;
+      mineffect = "scale";
       # largesize = 64;
       # TODO: Add persistent apps
     };
     finder = {
       AppleShowAllExtensions = true;
-      #ShowPathbar = true;
+      # ShowPathbar = true;
       FXDefaultSearchScope = "SCcf";   # search current folder by default
     };
    NSGlobalDomain = {
@@ -45,7 +52,9 @@
       NSDocumentSaveNewDocumentsToCloud = false;
       NSNavPanelExpandedStateForSaveMode = true;
       NSNavPanelExpandedStateForSaveMode2 = true;
+      NSAutomaticWindowAnimationsEnabled = false;
       "com.apple.mouse.tapBehavior" = 1;
+      NSWindowResizeTime = 0.001;
     };
     trackpad.Clicking = true;          # tap to click
     SoftwareUpdate.AutomaticallyInstallMacOSUpdates = false;
@@ -66,11 +75,21 @@
     loginwindow = {
       LoginwindowText = "Hiiiii :3";
     };
-    # universalaccess.mouseDriverCursorSize = 5.0; # I don't think this works
+    #universalaccess.mouseDriverCursorSize = 1.5; # This one only works if run in the default macos terminal (TODO: why?)
   };
 
-  # Homebrew — for GUI apps and anything not in nixpkgs
-  # nix-darwin installs Homebrew itself if missing, and manages it declaratively
+
+environment.loginItems = {
+  enable = true;
+  items = [
+    "/Applications/LinearMouse.app"
+    "/Users/galac/Applications/Flux.app"
+    "/Applications/ProtonVPN.app"
+  ];
+};
+
+
+  ### Homebrew
   homebrew = {
     enable = true;
     onActivation.autoUpdate = true;
@@ -84,6 +103,7 @@
       "affinity"
       "reaper"
       "claude"
+      "claude-code"
       "arduino-ide"
       "autodesk-fusion"
       "kicad"
@@ -97,6 +117,22 @@
       "proton-mail"
       "linearmouse"   # Fixes mouse scrolling direction and trackpad
       "bitwarden"
+      "anytype"
+      "figma"
+      "rekordbox"
+      "mixxx"
+      "steam"
+      "darktable"
+      "obsidian"
+      "zettlr"
+      "zotero"
+      "mactex"
+      "mactex"
+      "petrichor"
+
+      # Not on homebrew or nix:
+      #
+      # Serato DJ Pro
     ];
   };
 

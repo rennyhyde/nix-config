@@ -12,6 +12,17 @@
     fzf
     htop
     tree
+
+    ### Dev tools
+    # Rust
+    rustup
+
+    # Faust
+    faust
+
+    # IDE
+    neovim
+    tmux
   ];
 
   # Shell — home-manager writes ~/.zshrc from this
@@ -27,6 +38,22 @@
       cat  = "bat";
       grep = "rg";
       rebuild = "sudo darwin-rebuild switch --flake /etc/nix-darwin#rny-macbook";
+      nixwork = ''
+        if tmux has-session -t nixdarwin 2>/dev/null; then
+          tmux attach-session -t nixdarwin
+        else
+          tmux new-session -d -s nixdarwin -c /etc/nix-darwin \; \
+          send-keys "nvim flake.nix" Enter \; \
+          split-window -h -c /etc/nix-darwin \; \
+          send-keys "nvim configuration.nix" Enter \; \
+          split-window -v -c /etc/nix-darwin \; \
+          select-pane -t 0 \; \
+          split-window -v -c /etc/nix-darwin \; \
+          send-keys "nvim home.nix" Enter \; \
+          select-pane -t 0 \; \
+          attach-session -t nixdarwin
+        fi
+      '';
     };
     # Anything else that isn't covered by nix goes in the initExtra
     initContent = ''

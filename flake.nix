@@ -9,9 +9,10 @@
 
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    darwin-login-items.url = "github:uncenter/nix-darwin-login-items";
   };
 
-  outputs = inputs@{ self, nix-darwin, nixpkgs, home-manager }:
+  outputs = inputs@{ self, nix-darwin, nixpkgs, home-manager, darwin-login-items}:
   {
     darwinConfigurations."rny-macbook" = nix-darwin.lib.darwinSystem {
       system = "aarch64-darwin";  # Apple Silicon; use x86_64-darwin for Intel
@@ -23,6 +24,7 @@
           home-manager.useUserPackages = true;
           home-manager.users.galac = import ./home.nix;
         }
+	  darwin-login-items.darwinModules.default
       ];
     };
   };
