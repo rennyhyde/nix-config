@@ -6,6 +6,9 @@
 
   networking.hostName = "lovefield";
 
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+
   # Static IP — update interface name to match your hardware (check with `ip link`)
   # networking.interfaces.eth0.ipv4.addresses = [{
   #   address = "192.168.1.XXX"; # replace with actual static IP
