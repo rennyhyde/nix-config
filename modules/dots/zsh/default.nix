@@ -22,7 +22,7 @@
       #     tmux new-session -d -s nixdarwin -c /etc/nix-darwin \; \
       #     send-keys "nvim flake.nix" Enter \; \
       #     split-window -h -c /etc/nix-darwin \; \
-      #     send-keys "nvim modules/darwin/rny-macbook/configuration.nix" Enter \; \
+      #     send-keys "nvim modules/machines/darwin/rny-macbook/configuration.nix" Enter \; \
       #     split-window -v -c /etc/nix-darwin \; \
       #     select-pane -t 0 \; \
       #     split-window -v -c /etc/nix-darwin \; \

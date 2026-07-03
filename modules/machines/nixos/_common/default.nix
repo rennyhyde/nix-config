@@ -40,5 +40,5 @@
   programs.zsh.enable = true;
 
   # ── Time ──────────────────────────────────────────────────────────────────
-  time.timeZone = "America/New_York"; # override per-machine as needed
+  time.timeZone = "America/Chicago"; # override per-machine as needed
 }

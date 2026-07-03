@@ -20,7 +20,7 @@ nix-darwin.lib.darwinSystem {
       home-manager.useUserPackages = true;
       # extraSpecialArgs makes `inputs` available inside home-manager modules too
       home-manager.extraSpecialArgs = { inherit inputs; };
-      home-manager.users.galac = import ../home/galac;
+      home-manager.users.galac = import ../../home/galac;
     }
   ];
 }

@@ -16,7 +16,7 @@
 
   outputs = inputs@{ self, nix-darwin, nixpkgs, home-manager, darwin-login-items}:
   {
-    darwinConfigurations."rny-macbook" = import ./modules/darwin {
+    darwinConfigurations."rny-macbook" = import ./modules/machines/darwin {
       inherit inputs nixpkgs nix-darwin darwin-login-items home-manager;
     };
 
@@ -24,8 +24,8 @@
       system = "x86_64-linux";
       specialArgs = { inherit inputs; };
       modules = [
-        ./modules/nixos/_common
-        ./modules/nixos/lovefield/configuration.nix
+        ./modules/machines/nixos/_common
+        ./modules/machines/nixos/lovefield/configuration.nix
         home-manager.nixosModules.home-manager
         {
           home-manager.useGlobalPkgs    = true;

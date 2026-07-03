@@ -1,6 +1,6 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
 {
-  programs.vscode = {
+  programs.vscode = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
     enable = true;
     profiles.default.extensions = with pkgs.vscode-extensions; [
       rust-lang.rust-analyzer
