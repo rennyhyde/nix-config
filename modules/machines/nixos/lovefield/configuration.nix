@@ -1,4 +1,40 @@
 { config, pkgs, lib, ... }:
+let
+  # EC register 0x98 (offset 152) controls cooler boost on MSI GF63 EC 16R3EMS1.101.
+  # 0x80 = max fans (cooler boost), 0x02 = firmware auto curve.
+  fanControlScript = pkgs.writeShellScript "msi-fan-control" ''
+    EC=/sys/kernel/debug/ec/ec0/io
+    BOOST_THRESH=65000
+    AUTO_THRESH=55000
+
+    set_boost() { printf '\x80' | ${pkgs.coreutils}/bin/dd of="$EC" bs=1 seek=152 count=1 2>/dev/null; }
+    set_auto()  { printf '\x02' | ${pkgs.coreutils}/bin/dd of="$EC" bs=1 seek=152 count=1 2>/dev/null; }
+
+    # Locate the coretemp hwmon directory (temp1_input = Package id 0)
+    coretemp=""
+    for hwmon in /sys/class/hwmon/hwmon*; do
+      if [ "$(cat "$hwmon/name" 2>/dev/null)" = "coretemp" ]; then
+        coretemp="$hwmon"
+        break
+      fi
+    done
+
+    mode=auto
+    while true; do
+      temp=$(cat "$coretemp/temp1_input" 2>/dev/null || echo 50000)
+
+      if [ "$temp" -ge "$BOOST_THRESH" ] && [ "$mode" != "boost" ]; then
+        set_boost
+        mode=boost
+      elif [ "$temp" -le "$AUTO_THRESH" ] && [ "$mode" != "auto" ]; then
+        set_auto
+        mode=auto
+      fi
+
+      ${pkgs.coreutils}/bin/sleep 5
+    done
+  '';
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -35,9 +71,22 @@
 
   # Fan control (MSI GF63) — EC firmware 16R3EMS1.101 unsupported by both
   # in-kernel and BeardOverflow msi-ec. Using ec_sys for direct EC register access.
+  # fanControlScript (defined above) monitors CPU Package temp and writes to EC offset 152.
   environment.systemPackages = with pkgs; [ lm_sensors xxd ];
   boot.kernelModules = [ "ec_sys" ];
   boot.extraModprobeConfig = "options ec_sys write_support=1";
+
+  systemd.services.msi-fan-control = {
+    description = "MSI GF63 temperature-based fan control via EC register";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "systemd-modules-load.service" "sys-kernel-debug.mount" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = fanControlScript;
+      Restart = "always";
+      RestartSec = "5s";
+    };
+  };
 
   # Battery charge thresholds (MSI GF63)
   services.tlp = {
