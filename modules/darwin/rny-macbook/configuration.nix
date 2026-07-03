@@ -54,6 +54,7 @@
       "zotero"
       "mactex"
       "petrichor"
+      "soulseek"
 
       # Not on homebrew or nix:
       #
