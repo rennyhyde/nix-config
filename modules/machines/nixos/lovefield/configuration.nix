@@ -66,8 +66,8 @@ in
   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
 
   # Laptop-as-server: never sleep, never suspend on lid close
-  services.logind.lidSwitch = "ignore";
-  services.logind.lidSwitchExternalPower = "ignore";
+  services.logind.settings.Login.HandleLidSwitch = "ignore";
+  services.logind.settings.Login.HandleLidSwitchExternalPower = "ignore";
 
   # Fan control (MSI GF63) — EC firmware 16R3EMS1.101 unsupported by both
   # in-kernel and BeardOverflow msi-ec. Using ec_sys for direct EC register access.
