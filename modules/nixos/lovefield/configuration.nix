@@ -7,13 +7,13 @@
   networking.hostName = "lovefield";
 
   # Static IP — update interface name to match your hardware (check with `ip link`)
-  networking.interfaces.eth0.ipv4.addresses = [{
-    address = "192.168.1.XXX"; # replace with actual static IP
-    prefixLength = 24;
-  }];
-  networking.defaultGateway = "192.168.1.1"; # replace with your router IP
-  networking.nameservers = [ "1.1.1.1" "8.8.8.8" ];
-  networking.useDHCP = false;
+  # networking.interfaces.eth0.ipv4.addresses = [{
+  #   address = "192.168.1.XXX"; # replace with actual static IP
+  #   prefixLength = 24;
+  # }];
+  # networking.defaultGateway = "192.168.1.1"; # replace with your router IP
+  # networking.nameservers = [ "1.1.1.1" "8.8.8.8" ];
+  # networking.useDHCP = false;
 
   # Override _common: password auth required (server is shared)
   services.openssh.settings.PasswordAuthentication = lib.mkForce true;
