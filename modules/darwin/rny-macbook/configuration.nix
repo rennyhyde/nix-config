@@ -10,7 +10,7 @@
     enable = true;
     items = [
       "/Applications/LinearMouse.app"
-      "/Users/galac/Applications/Flux.app"
+      # "/Users/galac/Applications/Flux.app"
       "/Applications/ProtonVPN.app"
     ];
   };
@@ -20,6 +20,7 @@
     enable = true;
     onActivation.autoUpdate = true;
     onActivation.cleanup = "zap";     # remove anything not listed here
+    onActivation.extraFlags = [ "--force" ];
     casks = [
       "firefox"
       "ghostty"
@@ -55,6 +56,10 @@
       "mactex"
       "petrichor"
       "soulseek"
+      "rustdesk"
+      "touchdesigner"
+      "obs"
+      "balenaetcher"
 
       # Not on homebrew or nix:
       #
