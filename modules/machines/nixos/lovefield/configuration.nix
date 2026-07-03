@@ -33,19 +33,10 @@
   services.logind.lidSwitch = "ignore";
   services.logind.lidSwitchExternalPower = "ignore";
 
-  # Fan control (MSI GF63) — profile selected post-boot, see below
-  environment.systemPackages = with pkgs; [ lm_sensors nbfc-linux ];
-  systemd.services.nbfc-service = {
-    description = "NoteBook FanControl for Linux";
-    wantedBy    = [ "multi-user.target" ];
-    after       = [ "systemd-modules-load.service" ];
-    environment = { NBFC_ROOT = "/"; };
-    serviceConfig = {
-      Type      = "simple";
-      ExecStart = "${pkgs.nbfc-linux}/bin/nbfc_service";
-      Restart   = "on-failure";
-    };
-  };
+  # Fan control (MSI GF63) — out-of-tree msi-ec supports EC firmware 16R3EMS1
+  environment.systemPackages = with pkgs; [ lm_sensors ];
+  boot.extraModulePackages = [ config.boot.kernelPackages.msi-ec ];
+  boot.kernelModules = [ "msi-ec" ];
 
   # Battery charge thresholds (MSI GF63)
   services.tlp = {
