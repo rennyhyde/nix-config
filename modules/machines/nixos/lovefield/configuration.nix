@@ -38,6 +38,7 @@ in
 {
   imports = [
     ./hardware-configuration.nix
+    ../../../services/wireguard
   ];
 
   networking.hostName = "lovefield";
