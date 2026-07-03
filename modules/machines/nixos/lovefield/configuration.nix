@@ -33,10 +33,11 @@
   services.logind.lidSwitch = "ignore";
   services.logind.lidSwitchExternalPower = "ignore";
 
-  # Fan control (MSI GF63) — out-of-tree msi-ec supports EC firmware 16R3EMS1
-  environment.systemPackages = with pkgs; [ lm_sensors ];
-  boot.extraModulePackages = [ config.boot.kernelPackages.msi-ec ];
-  boot.kernelModules = [ "msi-ec" ];
+  # Fan control (MSI GF63) — EC firmware 16R3EMS1.101 unsupported by both
+  # in-kernel and BeardOverflow msi-ec. Using ec_sys for direct EC register access.
+  environment.systemPackages = with pkgs; [ lm_sensors xxd ];
+  boot.kernelModules = [ "ec_sys" ];
+  boot.extraModprobeConfig = "options ec_sys write_support=1";
 
   # Battery charge thresholds (MSI GF63)
   services.tlp = {
