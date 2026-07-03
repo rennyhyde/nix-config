@@ -39,10 +39,11 @@
     description = "NoteBook FanControl for Linux";
     wantedBy    = [ "multi-user.target" ];
     after       = [ "systemd-modules-load.service" ];
+    environment = { NBFC_ROOT = "/"; };
     serviceConfig = {
-      Type    = "simple";
+      Type      = "simple";
       ExecStart = "${pkgs.nbfc-linux}/bin/nbfc_service";
-      Restart = "on-failure";
+      Restart   = "on-failure";
     };
   };
 
