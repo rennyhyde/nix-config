@@ -21,12 +21,12 @@
   # Laptop-as-server: never sleep, never suspend on lid close
   services.logind.lidSwitch = "ignore";
   services.logind.lidSwitchExternalPower = "ignore";
-  systemd.sleep.extraConfig = ''
-    AllowSuspend=no
-    AllowHibernation=no
-    AllowHybridSleep=no
-    AllowSuspendThenHibernate=no
-  '';
+  # systemd.sleep.extraConfig = ''
+  #   AllowSuspend=no
+  #   AllowHibernation=no
+  #   AllowHybridSleep=no
+  #   AllowSuspendThenHibernate=no
+  # '';
 
   # Battery charge thresholds (MSI GF63 — thresholds via TLP)
   services.tlp = {
