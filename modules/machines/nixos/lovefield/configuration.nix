@@ -39,10 +39,12 @@ in
   imports = [
     ./hardware-configuration.nix
     ../../../services/wireguard
+    ../../../services/cloudflare-ddns
   ];
 
   networking.hostName = "lovefield";
   networking.networkmanager.enable = true;
+  # TODO: Try setting static IP here
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
