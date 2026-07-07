@@ -39,4 +39,8 @@
 
   networking.firewall.allowedUDPPorts = [ 51820 ];
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
+
+  # wg: show tunnel status, generate keys
+  # qrencode: generate client QR codes for mobile onboarding
+  environment.systemPackages = with pkgs; [ wireguard-tools qrencode ];
 }
