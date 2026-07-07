@@ -22,8 +22,8 @@
     ipv4 = true;
     ipv6 = false;
     domains = [
-      "YOURDOMAIN.net"        # apex — update to your actual domain
-      "vpn.YOURDOMAIN.net"    # WireGuard endpoint
+      "audioboss.win"        # apex — update to your actual domain
+      "vpn.audioboss.win"    # WireGuard endpoint
     ];
   };
 }
