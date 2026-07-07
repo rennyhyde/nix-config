@@ -65,6 +65,9 @@
       #
       # Serato DJ Pro
     ];
+    brews = [
+      "wireguard-tools"
+    ];
   };
 
   system.stateVersion = 5;

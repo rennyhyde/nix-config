@@ -104,11 +104,13 @@ in
     enable       = true;
     endpoint     = "vpn.audioboss.win";
     lanInterface = "enp3s0";
+    vpnSubnet    = "10.134.0";
     clients      = [
       # Add client names here and rebuild — keys + QR code appear in
       # /etc/wireguard/clients/<name>/ on the server.
-      # "android"
-      # "macbook"
+      "renny-zflip-6"
+      "renny-xps"
+      "renny-macbook"
     ];
   };
 
