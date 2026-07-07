@@ -38,7 +38,7 @@ in
 {
   imports = [
     ./hardware-configuration.nix
-    ../../../services/wireguard
+    ../../../services/wireguard       # defines options.services.wireguard-server
     ../../../services/cloudflare-ddns
   ];
 
@@ -98,6 +98,18 @@ in
       START_CHARGE_THRESH_BAT0 = 40;
       STOP_CHARGE_THRESH_BAT0  = 80;
     };
+  };
+
+  services.wireguard-server = {
+    enable       = true;
+    endpoint     = "vpn.audioboss.win";
+    lanInterface = "enp3s0";
+    clients      = [
+      # Add client names here and rebuild — keys + QR code appear in
+      # /etc/wireguard/clients/<name>/ on the server.
+      # "android"
+      # "macbook"
+    ];
   };
 
   users.users.galac = {
