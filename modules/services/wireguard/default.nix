@@ -67,9 +67,15 @@ let
             echo 'PersistentKeepalive = 25'
           } > $DIR/client.conf
 
+          echo "$CLIENT_IP" > $DIR/ip
           ${pkgs.qrencode}/bin/qrencode -t ansiutf8 -o $DIR/qr.txt < $DIR/client.conf
           echo "wireguard: provisioned client ${name} → $CLIENT_IP"
           echo "  QR code: cat $DIR/qr.txt"
+        fi
+
+        # Migrate: create ip file for clients provisioned before this was added
+        if [ -f $DIR/client.conf ] && [ ! -f $DIR/ip ]; then
+          grep "^Address" $DIR/client.conf | cut -d' ' -f3 | cut -d/ -f1 > $DIR/ip
         fi
       )
     '') cfg.clients}
@@ -127,10 +133,11 @@ in
       # which changes the systemd unit and triggers a service restart on rebuild.
       postUp = ''
         ${lib.concatMapStringsSep "\n" (name: ''
-          if [ -f /etc/wireguard/clients/${name}/public.key ]; then
-            PEER_IP=$(grep "^Address" /etc/wireguard/clients/${name}/client.conf | awk '{print $3}' | cut -d/ -f1)
+          if [ -f /etc/wireguard/clients/${name}/ip ] && [ -f /etc/wireguard/clients/${name}/public.key ]; then
+            read -r PEER_IP     < /etc/wireguard/clients/${name}/ip
+            read -r PEER_PUBKEY < /etc/wireguard/clients/${name}/public.key
             ${pkgs.wireguard-tools}/bin/wg set wg0 \
-              peer "$(cat /etc/wireguard/clients/${name}/public.key)" \
+              peer "$PEER_PUBKEY" \
               allowed-ips "$PEER_IP/32"
           fi
         '') cfg.clients}
