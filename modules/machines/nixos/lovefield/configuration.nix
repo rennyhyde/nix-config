@@ -46,12 +46,7 @@ in
   networking.networkmanager.enable = true;
   # TODO: Try setting static IP here
 
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.kernelParams = [ "consoleblank=60" ];
-
   time.timeZone = "America/Chicago";
-
   i18n.defaultLocale = "en_US.UTF-8";
   i18n.extraLocaleSettings = {
     LC_ADDRESS        = "en_US.UTF-8";
@@ -64,6 +59,10 @@ in
     LC_TELEPHONE      = "en_US.UTF-8";
     LC_TIME           = "en_US.UTF-8";
   };
+
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
+  boot.kernelParams = [ "consoleblank=60" ];  # Turn screen off after 60s of inactivity
 
   # Override _common: password auth required (server is shared)
   services.openssh.openFirewall = true;
@@ -128,6 +127,14 @@ in
     description  = "galac";
     extraGroups  = [ "networkmanager" "wheel" ];
     shell        = pkgs.zsh;
+  };
+
+  users.users.mir = {
+    isNormalUser = true;
+    description  = "mir";
+    extraGroups  = [ "networkmanager" "wheel" ];
+    shell        = pkgs.bash;
+    # Password is locked until set manually: sudo passwd mir
   };
 
   system.stateVersion = "26.05";
