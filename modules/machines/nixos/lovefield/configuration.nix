@@ -48,6 +48,7 @@ in
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.kernelParams = [ "consoleblank=60" ];
 
   time.timeZone = "America/Chicago";
 
