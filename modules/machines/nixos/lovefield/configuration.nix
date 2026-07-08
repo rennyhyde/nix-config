@@ -121,5 +121,9 @@ in
     shell        = pkgs.zsh;
   };
 
+  environment.systemPackages.gawk = {
+    enable = true;
+  };
+
   system.stateVersion = "26.05";
 }
