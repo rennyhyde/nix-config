@@ -75,7 +75,11 @@ in
   # Fan control (MSI GF63) — EC firmware 16R3EMS1.101 unsupported by both
   # in-kernel and BeardOverflow msi-ec. Using ec_sys for direct EC register access.
   # fanControlScript (defined above) monitors CPU Package temp and writes to EC offset 152.
-  environment.systemPackages = with pkgs; [ lm_sensors xxd ];
+  environment.systemPackages = with pkgs; [ 
+    lm_sensors 
+    xxd 
+    gawk
+  ];
   boot.kernelModules = [ "ec_sys" ];
   boot.extraModprobeConfig = "options ec_sys write_support=1";
 
@@ -119,10 +123,6 @@ in
     description  = "galac";
     extraGroups  = [ "networkmanager" "wheel" ];
     shell        = pkgs.zsh;
-  };
-
-  environment.systemPackages.gawk = {
-    enable = true;
   };
 
   system.stateVersion = "26.05";
