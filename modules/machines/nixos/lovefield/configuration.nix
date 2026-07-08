@@ -41,6 +41,7 @@ in
     ../../../services/wireguard       # defines options.services.wireguard-server
     ../../../services/cloudflare-ddns
     ../../../services/caddy           # defines options.services.caddy-server
+    ../../../services/hello-world     # Caddy smoke test — remove once real services are up
   ];
 
   networking.hostName = "lovefield";
@@ -123,10 +124,12 @@ in
     ];
   };
 
+  services.hello-world.enable = true;
+
   services.caddy-server = {
     enable = true;
     domain = "audioboss.win";
-    email  = "galactic284@gmail.com";
+    email  = "outpost-admin@proton.me";
     expose = [
       # Add services here as they're configured:
       # { subdomain = "sync";    port = 8384; }   # Syncthing
