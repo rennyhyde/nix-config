@@ -115,6 +115,10 @@ in
       "renny-zflip-6"
       "renny-xps"
       "renny-macbook"
+      "mir-tinyphone"
+      "mir-bigphone"
+      "mir-macbook"
+      "mir-imac"
     ];
   };
 
