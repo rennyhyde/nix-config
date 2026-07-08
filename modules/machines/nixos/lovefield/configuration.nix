@@ -40,6 +40,7 @@ in
     ./hardware-configuration.nix
     ../../../services/wireguard       # defines options.services.wireguard-server
     ../../../services/cloudflare-ddns
+    ../../../services/caddy           # defines options.services.caddy-server
   ];
 
   networking.hostName = "lovefield";
@@ -122,6 +123,21 @@ in
     ];
   };
 
+  services.caddy-server = {
+    enable = true;
+    domain = "audioboss.win";
+    email  = "galactic284@gmail.com";
+    expose = [
+      # Add services here as they're configured:
+      # { subdomain = "sync";    port = 8384; }   # Syncthing
+      # { subdomain = "music";   port = 4533; }   # Navidrome
+      # { subdomain = "photos";  port = 2283; }   # Immich
+      # { subdomain = "media";   port = 8096; }   # Jellyfin
+      # { subdomain = "docs";    port = 28981; }  # Paperless
+      # { subdomain = "git";     port = 3000; }   # Forgejo
+    ];
+  };
+
   users.users.galac = {
     isNormalUser = true;
     description  = "galac";
@@ -133,7 +149,7 @@ in
     isNormalUser = true;
     description  = "mir";
     extraGroups  = [ "networkmanager" "wheel" ];
-    shell        = pkgs.bash;
+    shell        = pkgs.zsh;
     # Password is locked until set manually: sudo passwd mir
   };
 
