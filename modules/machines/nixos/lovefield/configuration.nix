@@ -42,6 +42,7 @@ in
     ../../../services/cloudflare-ddns
     ../../../services/caddy           # defines options.services.caddy-server
     ../../../services/hello-world     # Caddy smoke test — remove once real services are up
+    ../../../services/syncthing
   ];
 
   networking.hostName = "lovefield";
@@ -126,13 +127,21 @@ in
 
   services.hello-world.enable = true;
 
+  services.syncthing-users = {
+    enable    = true;
+    instances = [
+      { user = "galac"; guiPort = 8384; }  # will eventually migrate to a different server
+      { user = "mir";   guiPort = 8385; }
+    ];
+  };
+
   services.caddy-server = {
     enable = true;
     domain = "audioboss.win";
     email  = "outpost-admin@proton.me";
     expose = [
-      # Add services here as they're configured:
-      # { subdomain = "sync";    port = 8384; }   # Syncthing
+      { subdomain = "sync-galac"; port = 8384; }  # Syncthing (galac)
+      { subdomain = "sync-mir";   port = 8385; }  # Syncthing (mir)
       # { subdomain = "music";   port = 4533; }   # Navidrome
       # { subdomain = "photos";  port = 2283; }   # Immich
       # { subdomain = "media";   port = 8096; }   # Jellyfin
