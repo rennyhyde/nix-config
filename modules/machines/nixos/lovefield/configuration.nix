@@ -149,12 +149,13 @@ in
   ];
 
   services.caddy-server = {
-    enable = true;
-    domain = "audioboss.win";
-    email  = "outpost-admin@proton.me";
+    enable    = true;
+    domain    = "audioboss.win";
+    email     = "outpost-admin@proton.me";
+    vpnSubnet = "10.134.0.0/24";
     expose = [
-      { subdomain = "sync-galac"; port = 8384; }  # Syncthing (galac)
-      { subdomain = "sync-mir";   port = 8385; }  # Syncthing (mir)
+      { subdomain = "sync-galac"; port = 8384; vpnOnly = true; }  # Syncthing (galac)
+      { subdomain = "sync-mir";   port = 8385; vpnOnly = true; }  # Syncthing (mir)
       # { subdomain = "music";   port = 4533; }   # Navidrome
       # { subdomain = "photos";  port = 2283; }   # Immich
       # { subdomain = "media";   port = 8096; }   # Jellyfin
