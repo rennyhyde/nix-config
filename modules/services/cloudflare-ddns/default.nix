@@ -21,9 +21,9 @@
     proxied = false;
     ipv4 = true;
     ipv6 = false;
-    domains = [
-      "audioboss.win"        # apex — update to your actual domain
-      "vpn.audioboss.win"    # WireGuard endpoint
-    ];
+    # domains = [
+    #   "audioboss.win"        # apex — update to your actual domain
+    #   "vpn.audioboss.win"    # WireGuard endpoint
+    # ];
   };
 }

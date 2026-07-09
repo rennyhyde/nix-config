@@ -135,6 +135,19 @@ in
     ];
   };
 
+  services.cloudflare-dyndns.domains = [
+    "audioboss.win"
+    "vpn.audioboss.win"
+    "hello.audioboss.win"
+    # "sync-galac.audioboss.win"
+    # "sync-mir.audioboss.win"
+    # "music.audioboss.win"
+    # "photos.audioboss.win"
+    # "git.audioboss.win"
+    # "paper.audioboss.win"
+    # "lovefield.audioboss.win"
+  ];
+
   services.caddy-server = {
     enable = true;
     domain = "audioboss.win";
