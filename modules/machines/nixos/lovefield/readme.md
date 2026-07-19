@@ -4,7 +4,7 @@
 
 # Hardware
 **Compute:** Lovefield runs on an MSI GF63 gaming laptop. It is always plugged in
-**Storage:** TBD
+**Storage:** 1TB internal SSD (root, ext4) + 4x2TB USB DAS drives in a ZFS RAIDZ1 pool named `storage` (~5.4TB usable, survives 1 drive failure), mounted per-service under `/mnt/storage/`. An older 1TB USB HDD is also attached but currently unmounted/unused.
 **Network:** Connected directly to router via ethernet
 
 # Owner's Guide
@@ -40,6 +40,45 @@ Remove dust occasionally.
     - `audioboss.win` DNS records hosted on cloudflare, updated via ddclient and a Cloudflare API token
 
 # Services
+## Storage (ZFS RAIDZ1)
+The `storage` pool spans the 4 drives on the USB DAS in a RAIDZ1 vdev (~5.4TB usable, tolerates 1 drive failure). Datasets are mounted per-service under `/mnt/storage/`. `boot.zfs.extraPools` and `networking.hostId` in `storage.nix` handle auto-import/mount at boot; the pool and datasets themselves are created manually since they need real `/dev/disk/by-id` paths.
+
+### Creating the pool (one-time)
+1. Identify the 4 new drives: `lsblk -o NAME,SIZE,MODEL,SERIAL` and `ls -la /dev/disk/by-id/ | grep -i usb`. Confirm exactly 4 devices at ~1.8TiB, distinct from the internal SSD and the old 1TB HDD.
+2. Wipe them (destructive — double check the disk IDs first): `sudo wipefs -a /dev/disk/by-id/<disk>` for each of the 4.
+3. Create the pool:
+   ```
+   sudo zpool create -o ashift=12 -O mountpoint=none storage raidz1 \
+     /dev/disk/by-id/<disk1> /dev/disk/by-id/<disk2> \
+     /dev/disk/by-id/<disk3> /dev/disk/by-id/<disk4>
+   ```
+4. Create per-service datasets:
+   ```
+   sudo zfs create -o mountpoint=/mnt/storage/syncthing/galac storage/syncthing-galac
+   sudo zfs create -o mountpoint=/mnt/storage/syncthing/mir   storage/syncthing-mir
+   sudo zfs create -o mountpoint=/mnt/storage/immich          storage/immich
+   sudo zfs create -o mountpoint=/mnt/storage/jellyfin        storage/jellyfin
+   sudo zfs create -o mountpoint=/mnt/storage/paperless       storage/paperless
+   sudo zfs create -o mountpoint=/mnt/storage/navidrome       storage/navidrome
+   sudo chown galac:users /mnt/storage/syncthing/galac
+   sudo chown mir:users   /mnt/storage/syncthing/mir
+   ```
+   Immich/Jellyfin/Paperless/Navidrome datasets stay root-owned until those services' NixOS modules exist and their real service-user UIDs are known. Add more datasets any time with `zfs create`.
+5. Point each user's Syncthing folders (via its web GUI, not Nix) at `/mnt/storage/syncthing/<user>/...`.
+
+### Common Commands
+```zsh
+sudo zpool status storage   # pool + drive health
+sudo zfs list                # datasets and mountpoints
+df -h /mnt/storage/*
+```
+
+### Simulating a drive failure (optional, to verify the "1 drive failure" guarantee)
+```zsh
+sudo zpool offline storage <disk-by-id>   # pool goes DEGRADED, stays online
+sudo zpool online storage <disk-by-id>    # resilvers back to healthy
+```
+
 ## Wireguard
 Wireguard is the VPN protocol that allows users to access lovefield, the local network, and local-only services.
 

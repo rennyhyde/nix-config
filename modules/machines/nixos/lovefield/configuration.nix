@@ -38,6 +38,7 @@ in
 {
   imports = [
     ./hardware-configuration.nix
+    ./storage.nix                     # ZFS RAIDZ1 pool on the USB DAS
     ../../../services/wireguard       # defines options.services.wireguard-server
     ../../../services/cloudflare-ddns
     ../../../services/caddy           # defines options.services.caddy-server
