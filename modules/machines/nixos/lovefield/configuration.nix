@@ -140,14 +140,17 @@ in
     "audioboss.win"
     "vpn.audioboss.win"
     "hello.audioboss.win"
-    "sync-galac.audioboss.win"
-    "sync-mir.audioboss.win"
+    # sync-galac and sync-mir intentionally omitted — those A records are
+    # manually set to 10.134.0.1 (WireGuard IP) in Cloudflare so VPN clients
+    # route directly through the tunnel instead of hairpin-NATing via the router.
     "music.audioboss.win"
     "photos.audioboss.win"
     "git.audioboss.win"
     "paper.audioboss.win"
     "lovefield.audioboss.win"
   ];
+
+  services.jellyfin.enable = true;
 
   services.caddy-server = {
     enable    = true;
@@ -157,9 +160,9 @@ in
     expose = [
       { subdomain = "sync-galac"; port = 8384; vpnOnly = true; }  # Syncthing (galac)
       { subdomain = "sync-mir";   port = 8385; vpnOnly = true; }  # Syncthing (mir)
+      { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
       # { subdomain = "music";   port = 4533; }   # Navidrome
       # { subdomain = "photos";  port = 2283; }   # Immich
-      # { subdomain = "media";   port = 8096; }   # Jellyfin
       # { subdomain = "docs";    port = 28981; }  # Paperless
       # { subdomain = "git";     port = 3000; }   # Forgejo
     ];
