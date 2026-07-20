@@ -182,14 +182,13 @@ in
     services.dnsmasq = lib.mkIf (cfg.localDomains != []) {
       enable = true;
       resolveLocalQueries = false;
-      extraConfig = ''
-        interface=wg0
-        bind-interfaces
-        no-resolv
-        server=1.1.1.1
-        server=1.0.0.1
-        ${lib.concatMapStringsSep "\n" (d: "address=/${d}/${cfg.vpnSubnet}.1") cfg.localDomains}
-      '';
+      settings = {
+        interface        = "wg0";
+        "bind-interfaces" = true;
+        "no-resolv"      = true;
+        server           = [ "1.1.1.1" "1.0.0.1" ];
+        address          = map (d: "/${d}/${cfg.vpnSubnet}.1") cfg.localDomains;
+      };
     };
 
     networking.firewall.interfaces.wg0 = lib.mkIf (cfg.localDomains != []) {
