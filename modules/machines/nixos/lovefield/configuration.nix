@@ -83,6 +83,7 @@ in
     lm_sensors 
     xxd 
     gawk
+    openssl
   ];
   boot.kernelModules = [ "ec_sys" ];
   boot.extraModprobeConfig = "options ec_sys write_support=1";

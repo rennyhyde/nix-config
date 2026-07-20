@@ -43,27 +43,54 @@ Remove dust occasionally.
 ## Storage (ZFS RAIDZ1)
 The `storage` pool spans the 4 drives on the USB DAS in a RAIDZ1 vdev (~5.4TB usable, tolerates 1 drive failure). Datasets are mounted per-service under `/mnt/storage/`. `boot.zfs.extraPools` and `networking.hostId` in `storage.nix` handle auto-import/mount at boot; the pool and datasets themselves are created manually since they need real `/dev/disk/by-id` paths.
 
+### Bay → drive mapping
+The USB DAS uses a JMicron bridge that doesn't pass through each drive's real serial over USB — its `by-id` name only identifies a **bay** (via the trailing SCSI target `-0:N`), not a specific physical disk. If a drive is ever pulled for replacement, use this table to know which physical WD drive was in which bay:
+
+| bay/dev | by-id | WD serial |
+|---|---|---|
+| sda | `usb-JMicron_Generic_DISK00_0123456789ABCDEF-0:0` | WD-WCC4M0626885 |
+| sdb | `usb-JMicron_Generic_DISK01_0123456789ABCDEF-0:1` | WD-WCC4M0594521 |
+| sdc | `usb-JMicron_Generic_DISK02_0123456789ABCDEF-0:2` | WD-WCC4M0579554 |
+| sdd | `usb-JMicron_Generic_DISK03_0123456789ABCDEF-0:3` | WD-WCC4M0594460 |
+
 ### Creating the pool (one-time)
-1. Identify the 4 new drives: `lsblk -o NAME,SIZE,MODEL,SERIAL` and `ls -la /dev/disk/by-id/ | grep -i usb`. Confirm exactly 4 devices at ~1.8TiB, distinct from the internal SSD and the old 1TB HDD.
-2. Wipe them (destructive — double check the disk IDs first): `sudo wipefs -a /dev/disk/by-id/<disk>` for each of the 4.
+1. Identify the 4 new drives: `lsblk -o NAME,SIZE,MODEL,SERIAL` and `ls -la /dev/disk/by-id/ | grep -i usb`. Confirm exactly 4 devices at ~1.8TiB, distinct from the internal SSD and the old 1TB HDD. (Already done above — see the bay/serial table.)
+2. Wipe them (destructive — double check the disk IDs first):
+   ```
+   sudo wipefs -a /dev/disk/by-id/usb-JMicron_Generic_DISK00_0123456789ABCDEF-0:0
+   sudo wipefs -a /dev/disk/by-id/usb-JMicron_Generic_DISK01_0123456789ABCDEF-0:1
+   sudo wipefs -a /dev/disk/by-id/usb-JMicron_Generic_DISK02_0123456789ABCDEF-0:2
+   sudo wipefs -a /dev/disk/by-id/usb-JMicron_Generic_DISK03_0123456789ABCDEF-0:3
+   ```
 3. Create the pool:
    ```
    sudo zpool create -o ashift=12 -O mountpoint=none storage raidz1 \
-     /dev/disk/by-id/<disk1> /dev/disk/by-id/<disk2> \
-     /dev/disk/by-id/<disk3> /dev/disk/by-id/<disk4>
+     /dev/disk/by-id/usb-JMicron_Generic_DISK00_0123456789ABCDEF-0:0 \
+     /dev/disk/by-id/usb-JMicron_Generic_DISK01_0123456789ABCDEF-0:1 \
+     /dev/disk/by-id/usb-JMicron_Generic_DISK02_0123456789ABCDEF-0:2 \
+     /dev/disk/by-id/usb-JMicron_Generic_DISK03_0123456789ABCDEF-0:3
    ```
 4. Create per-service datasets:
    ```
    sudo zfs create -o mountpoint=/mnt/storage/syncthing/galac storage/syncthing-galac
    sudo zfs create -o mountpoint=/mnt/storage/syncthing/mir   storage/syncthing-mir
    sudo zfs create -o mountpoint=/mnt/storage/immich          storage/immich
-   sudo zfs create -o mountpoint=/mnt/storage/jellyfin        storage/jellyfin
+   sudo zfs create -o mountpoint=/mnt/storage/media           storage/media
    sudo zfs create -o mountpoint=/mnt/storage/paperless       storage/paperless
    sudo zfs create -o mountpoint=/mnt/storage/navidrome       storage/navidrome
    sudo chown galac:users /mnt/storage/syncthing/galac
    sudo chown mir:users   /mnt/storage/syncthing/mir
+
+   sudo mkdir -p /mnt/storage/media/{movies,tv,downloads}
+   sudo groupadd media
+   sudo usermod -aG media galac
+   sudo usermod -aG media mir
+   sudo chown -R root:media /mnt/storage/media
+   sudo chmod -R 2775 /mnt/storage/media   # setgid so new files/dirs inherit the `media` group
    ```
-   Immich/Jellyfin/Paperless/Navidrome datasets stay root-owned until those services' NixOS modules exist and their real service-user UIDs are known. Add more datasets any time with `zfs create`.
+   `storage/media` is a **shared** dataset, not per-service: Jellyfin, Samba, and any future download automation (Sonarr/Radarr/qBittorrent-style tools) all read/write the same `movies/`, `tv/`, `downloads/` tree. This matters because ZFS datasets are separate filesystems even within one pool — hardlinks (how those download tools do an instant, no-copy move from `downloads/` into the library) don't work *across* datasets, only within one. Keeping them all under `storage/media` is what makes that work. Once Jellyfin's/Samba's NixOS modules exist, add their service users to the `media` group instead of relying on `galac`/`mir` membership.
+
+   Immich/Paperless/Navidrome datasets stay root-owned until those services' NixOS modules exist and their real service-user UIDs are known. Add more datasets any time with `zfs create`.
 5. Point each user's Syncthing folders (via its web GUI, not Nix) at `/mnt/storage/syncthing/<user>/...`.
 
 ### Common Commands
