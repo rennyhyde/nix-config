@@ -109,11 +109,12 @@ in
   };
 
   services.wireguard-server = {
-    enable       = true;
-    endpoint     = "vpn.audioboss.win";
-    lanInterface = "enp3s0";
-    vpnSubnet    = "10.134.0";
-    clients      = [
+    enable        = true;
+    endpoint      = "vpn.audioboss.win";
+    lanInterface  = "enp3s0";
+    vpnSubnet     = "10.134.0";
+    localDomains  = [ "audioboss.win" ];  # VPN clients resolve *.audioboss.win → 10.134.0.1
+    clients       = [
       # Add client names here and rebuild — keys + QR code appear in
       # /etc/wireguard/clients/<name>/ on the server.
       "renny-zflip-6"

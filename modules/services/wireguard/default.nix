@@ -58,7 +58,7 @@ let
             echo '[Interface]'
             echo "PrivateKey = $PRIV"
             echo "Address = $CLIENT_IP/24"
-            echo 'DNS = 1.1.1.1'
+            echo "DNS = ${cfg.vpnSubnet}.1"
             echo ""
             echo '[Peer]'
             echo "PublicKey = $SERVER_PUBKEY"
@@ -76,6 +76,14 @@ let
         # Migrate: create ip file for clients provisioned before this was added
         if [ -f $DIR/client.conf ] && [ ! -f $DIR/ip ]; then
           grep "^Address" $DIR/client.conf | cut -d' ' -f3 | cut -d/ -f1 > $DIR/ip
+        fi
+
+        # Migrate: switch DNS from public resolver to this server's VPN resolver
+        # so clients resolve domain names directly through the tunnel.
+        if grep -q "^DNS = 1.1.1.1$" "$DIR/client.conf" 2>/dev/null; then
+          sed -i "s/^DNS = 1.1.1.1$/DNS = ${cfg.vpnSubnet}.1/" "$DIR/client.conf"
+          ${pkgs.qrencode}/bin/qrencode -t ansiutf8 -o $DIR/qr.txt < $DIR/client.conf
+          echo "wireguard: updated DNS for ${name} -> ${cfg.vpnSubnet}.1 (re-scan QR code)"
         fi
       )
     '') cfg.clients}
@@ -118,6 +126,17 @@ in
         Removing a name revokes peer access; files are kept for reference.
       '';
     };
+
+    localDomains = lib.mkOption {
+      type    = lib.types.listOf lib.types.str;
+      default = [];
+      example = [ "example.com" ];
+      description = ''
+        Domains to resolve to this server's VPN IP (vpnSubnet.1) for VPN clients.
+        Enables a dnsmasq resolver on wg0 so clients bypass hairpin NAT when
+        accessing services hosted on this server.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -156,5 +175,25 @@ in
     networking.firewall.allowedUDPPorts = [ cfg.listenPort ];
     boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
     environment.systemPackages = with pkgs; [ wireguard-tools qrencode ];
+
+    # DNS resolver for VPN clients — returns vpnSubnet.1 for localDomains,
+    # forwards everything else to 1.1.1.1. Listens only on wg0 so it's
+    # never reachable from the internet.
+    services.dnsmasq = lib.mkIf (cfg.localDomains != []) {
+      enable = true;
+      resolveLocalQueries = false;
+      extraConfig = ''
+        interface=wg0
+        bind-interfaces
+        no-resolv
+        server=1.1.1.1
+        server=1.0.0.1
+        ${lib.concatMapStringsSep "\n" (d: "address=/${d}/${cfg.vpnSubnet}.1") cfg.localDomains}
+      '';
+    };
+
+    networking.firewall.interfaces.wg0 = lib.mkIf (cfg.localDomains != []) {
+      allowedUDPPorts = [ 53 ];
+    };
   };
 }
