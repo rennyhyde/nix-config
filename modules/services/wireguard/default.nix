@@ -81,7 +81,7 @@ let
         # Migrate: switch DNS from public resolver to this server's VPN resolver
         # so clients resolve domain names directly through the tunnel.
         if grep -q "^DNS = 1.1.1.1$" "$DIR/client.conf" 2>/dev/null; then
-          sed -i "s/^DNS = 1.1.1.1$/DNS = ${cfg.vpnSubnet}.1/" "$DIR/client.conf"
+          ${pkgs.gnused}/bin/sed -i "s/^DNS = 1.1.1.1$/DNS = ${cfg.vpnSubnet}.1/" "$DIR/client.conf"
           ${pkgs.qrencode}/bin/qrencode -t ansiutf8 -o $DIR/qr.txt < $DIR/client.conf
           echo "wireguard: updated DNS for ${name} -> ${cfg.vpnSubnet}.1 (re-scan QR code)"
         fi
