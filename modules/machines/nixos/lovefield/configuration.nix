@@ -153,6 +153,7 @@ in
   ];
 
   services.jellyfin.enable = true;
+  services.jellyfin.openFirewall = true;  # opens 8096 (HTTP) and 8920 (HTTPS)
 
   services.caddy-server = {
     enable    = true;
