@@ -191,6 +191,13 @@ in
       };
     };
 
+    # dnsmasq binds to wg0 at startup — it must wait for WireGuard to create the interface.
+    # bindsTo means dnsmasq also stops/restarts when WireGuard stops/restarts.
+    systemd.services.dnsmasq = lib.mkIf (cfg.localDomains != []) {
+      after    = [ "wg-quick-wg0.service" ];
+      bindsTo  = [ "wg-quick-wg0.service" ];
+    };
+
     networking.firewall.interfaces.wg0 = lib.mkIf (cfg.localDomains != []) {
       allowedUDPPorts = [ 53 ];
     };
