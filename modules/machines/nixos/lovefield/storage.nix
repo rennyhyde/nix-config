@@ -8,6 +8,7 @@
   networking.hostId = "b011e6d7";
 
   boot.zfs.extraPools = [ "storage" ];
+  boot.zfs.forceImportRoot = false;  # root is ext4, not ZFS — this setting doesn't apply
 
   services.zfs.autoScrub.enable = true;
 }
