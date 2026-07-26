@@ -127,16 +127,6 @@ in
       '';
     };
 
-    localDomains = lib.mkOption {
-      type    = lib.types.listOf lib.types.str;
-      default = [];
-      example = [ "example.com" ];
-      description = ''
-        Domains to resolve to this server's VPN IP (vpnSubnet.1) for VPN clients.
-        Enables a dnsmasq resolver on wg0 so clients bypass hairpin NAT when
-        accessing services hosted on this server.
-      '';
-    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -176,30 +166,5 @@ in
     boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
     environment.systemPackages = with pkgs; [ wireguard-tools qrencode ];
 
-    # DNS resolver for VPN clients — returns vpnSubnet.1 for localDomains,
-    # forwards everything else to 1.1.1.1. Listens only on wg0 so it's
-    # never reachable from the internet.
-    services.dnsmasq = lib.mkIf (cfg.localDomains != []) {
-      enable = true;
-      resolveLocalQueries = false;
-      settings = {
-        interface        = "wg0";
-        "bind-interfaces" = true;
-        "no-resolv"      = true;
-        server           = [ "1.1.1.1" "1.0.0.1" ];
-        address          = map (d: "/${d}/${cfg.vpnSubnet}.1") cfg.localDomains;
-      };
-    };
-
-    # dnsmasq binds to wg0 at startup — it must wait for WireGuard to create the interface.
-    # bindsTo means dnsmasq also stops/restarts when WireGuard stops/restarts.
-    systemd.services.dnsmasq = lib.mkIf (cfg.localDomains != []) {
-      after    = [ "wg-quick-wg0.service" ];
-      bindsTo  = [ "wg-quick-wg0.service" ];
-    };
-
-    networking.firewall.interfaces.wg0 = lib.mkIf (cfg.localDomains != []) {
-      allowedUDPPorts = [ 53 ];
-    };
   };
 }

@@ -114,7 +114,6 @@ in
     endpoint      = "vpn.audioboss.win";
     lanInterface  = "enp3s0";
     vpnSubnet     = "10.134.0";
-    localDomains  = [ "audioboss.win" ];  # VPN clients resolve *.audioboss.win → 10.134.0.1
     clients       = [
       # Add client names here and rebuild — keys + QR code appear in
       # /etc/wireguard/clients/<name>/ on the server.
@@ -142,15 +141,42 @@ in
     "audioboss.win"
     "vpn.audioboss.win"
     "hello.audioboss.win"
-    # sync-galac and sync-mir intentionally omitted — those A records are
-    # manually set to 10.134.0.1 (WireGuard IP) in Cloudflare so VPN clients
-    # route directly through the tunnel instead of hairpin-NATing via the router.
+    # sync-galac and sync-mir intentionally omitted — VPN-only services don't need
+    # DDNS updates since VPN clients resolve *.audioboss.win via AdGuard Home (local IP)
+    # and WAN clients get 403 from Caddy regardless of what Cloudflare returns.
     "music.audioboss.win"
     "photos.audioboss.win"
     "git.audioboss.win"
     "paper.audioboss.win"
     "lovefield.audioboss.win"
   ];
+
+  # AdGuard Home — network-wide DNS resolver with ad blocking.
+  # Listens on all interfaces: LAN clients (10.0.0.5:53) and VPN clients (10.134.0.1:53).
+  # Returns 10.0.0.5 for *.audioboss.win so both LAN and VPN bypass hairpin NAT.
+  # WAN clients use Cloudflare and are unaffected.
+  services.adguardhome = {
+    enable          = true;
+    mutableSettings = true;  # web UI changes to credentials/block-lists persist across rebuilds;
+                             # dns.rewrites is still authoritative from Nix (lists replace, not merge)
+    settings = {
+      dns = {
+        bind_hosts    = [ "0.0.0.0" ];
+        port          = 53;
+        upstream_dns  = [ "1.1.1.1" "1.0.0.1" ];
+        bootstrap_dns = [ "1.1.1.1" "1.0.0.1" ];
+        rewrites = [
+          { domain = "audioboss.win";   answer = "10.0.0.5"; }
+          { domain = "*.audioboss.win"; answer = "10.0.0.5"; }
+        ];
+      };
+    };
+  };
+
+  # Port 53 for AdGuard Home DNS (TCP for large responses, UDP for standard queries).
+  # lovefield is behind router NAT so opening this globally is safe.
+  networking.firewall.allowedTCPPorts = [ 53 ];
+  networking.firewall.allowedUDPPorts = [ 53 ];
 
   services.jellyfin.enable = true;
   services.jellyfin.openFirewall = true;  # opens 8096 (HTTP) and 8920 (HTTPS)
