@@ -203,6 +203,7 @@ in
       { subdomain = "sync-galac"; port = 8384; vpnOnly = true; }  # Syncthing (galac)
       { subdomain = "sync-mir";   port = 8385; vpnOnly = true; }  # Syncthing (mir)
       { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
+      { subdomain = "dns";        port = 3000; }
       # { subdomain = "music";   port = 4533; }   # Navidrome
       # { subdomain = "photos";  port = 2283; }   # Immich
       # { subdomain = "docs";    port = 28981; }  # Paperless
