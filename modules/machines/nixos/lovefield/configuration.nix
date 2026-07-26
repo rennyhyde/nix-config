@@ -158,6 +158,7 @@ in
   # WAN clients use Cloudflare and are unaffected.
   services.adguardhome = {
     enable          = true;
+    openFirewall    = true;   # opens port 3000 for the web UI
     mutableSettings = true;  # web UI changes to credentials/block-lists persist across rebuilds;
                              # dns.rewrites is still authoritative from Nix (lists replace, not merge)
     settings = {
