@@ -159,13 +159,14 @@ in
   services.adguardhome = {
     enable          = true;
     openFirewall    = true;    # opens port 3000 for the web UI
-    mutableSettings = false;  # preserves web UI changes (rewrites, block lists) across rebuilds;
-                             # Nix still owns: users (auth) and dns upstreams
+    mutableSettings = true;  # Allow other users (mir) to change settings via web portal
     settings = {
       users = [
         {
           name     = "admin";
           password = "$2y$05$lhXu9hiy2j1YxpUzYlc5pu42FZ1xLUGwj0kExIhc70ow1sTeAl6YO";
+          # pw generated with:
+          # htpasswd -nbB admin 'your-chosen-password' | cut -d: -f2
         }
       ];
       dns = {
@@ -173,7 +174,6 @@ in
         port          = 53;
         upstream_dns  = [ "1.1.1.1" "1.0.0.1" ];
         bootstrap_dns = [ "1.1.1.1" "1.0.0.1" ];
-        # rewrites managed via web UI (Filters → DNS Rewrites) so they survive rebuilds
       };
       # services.adguardhome.settings.filtering.rewrites
       # https://github.com/NixOS/nixpkgs/issues/379646#issuecomment-2638389264

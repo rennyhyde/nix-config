@@ -109,6 +109,16 @@ sudo zpool online storage <disk-by-id>    # resilvers back to healthy
 ## Wireguard
 Wireguard is the VPN protocol that allows users to access lovefield, the local network, and local-only services.
 
+### Router Port Forward
+1. Login to your router's admin page
+2. Forward port 51820 to lovefield:
+```
+Protocol: UDP
+External port: 51820
+Internal IP: lovefield's static LAN IP
+Internal port: 51820
+```
+
 ### Provisioning a New Client
 1. Add the client name to `lovefield/configuration.nix`. No spaces.
 2. Rebuild on Lovefield. Connections (probably) won't be dropped.
@@ -156,7 +166,7 @@ sudo wg show
 
 
 
-## DNS
+## Dynamic DNS
 DNS records for `audioboss.win` are updated automatically by `ddclient` to point to lovefield. DNS records are hosted on cloudflare, and updated using a cloudflare API key.
 
 ### First Time Setup
@@ -173,12 +183,10 @@ echo "PASTE_YOUR_TOKEN_HERE" | sudo tee /etc/cloudflare/api-token
 sudo chmod 600 /etc/cloudflare/api-token
 ```
 
-#### Router Port Forward
-1. Login to your router's admin page
-2. Forward port 51820 to lovefield:
-```
-Protocol: UDP
-External port: 51820
-Internal IP: lovefield's static LAN IP
-Internal port: 51820
-```
+## Adguard Home
+Adguard Home serves two purposes: It blocks ads and trackers on the local network by being set as the primary DNS server for all LAN requests, and it contains specific DNS rewrites which point audioboss.win services to lovefield instead of back to the router, which triggers the hairpin NAT issue.
+
+### Setup
+#### Nix Config
+1. Set a password hash using `htpasswd -nbB admin 'your-chosen-password' | cut -d: -f2` for the admin account. Otherwise there will not be an admin account
+2. Add DNS rewrites for local services
