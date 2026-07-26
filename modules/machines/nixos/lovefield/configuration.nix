@@ -179,8 +179,8 @@ in
       # https://github.com/NixOS/nixpkgs/issues/379646#issuecomment-2638389264
       filtering = {
         rewrites = [
-          { domain = "audioboss.win"; answer = "10.0.0.5";}
-          { domain = "*.audioboss.win"; answer = "10.0.0.5";}
+          { domain = "audioboss.win"; answer = "10.0.0.5"; enabled = true}
+          { domain = "*.audioboss.win"; answer = "10.0.0.5";enabled = true}
         ];
       };
     };
