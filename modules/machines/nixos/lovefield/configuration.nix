@@ -84,6 +84,7 @@ in
     xxd 
     gawk
     openssl
+    dig
   ];
   boot.kernelModules = [ "ec_sys" ];
   boot.extraModprobeConfig = "options ec_sys write_support=1";
