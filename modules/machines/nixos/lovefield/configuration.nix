@@ -160,7 +160,7 @@ in
   services.adguardhome = {
     enable          = true;
     openFirewall    = true;    # opens port 3000 for the web UI
-    mutableSettings = true;  # Allow other users (mir) to change settings via web portal
+    mutableSettings = false;  # Allow other users (mir) to change settings via web portal
     settings = {
       users = [
         {
