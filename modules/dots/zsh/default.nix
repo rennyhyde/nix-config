@@ -12,7 +12,6 @@
       la      = "eza -la --icons --git";
       cat     = "bat";
       grep    = "rg";
-      rebuild = "sudo darwin-rebuild switch --flake /etc/nix-darwin#rny-macbook";
 
       # Open a 4-pane tmux workspace for editing the nix config
       # nixwork = ''

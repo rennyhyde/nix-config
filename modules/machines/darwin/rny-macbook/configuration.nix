@@ -82,4 +82,7 @@
     nerd-fonts._0xproto
     source-code-pro
   ];
+
+  home-manager.users.galac.programs.zsh.shellAliases.rebuild =
+    "sudo darwin-rebuild switch --flake /etc/nix-darwin#rny-macbook";
 }

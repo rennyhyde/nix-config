@@ -295,4 +295,7 @@ in
   };
 
   system.stateVersion = "26.05";
+
+  home-manager.users.galac.programs.zsh.shellAliases.rebuild =
+    "cd /etc/nixos; sudo git pull; sudo nixos-rebuild switch --flake .#lovefield";
 }
