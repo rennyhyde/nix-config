@@ -171,7 +171,10 @@ in
         }
       ];
       dns = {
-        bind_hosts    = [ "0.0.0.0" ];
+        # Explicit addresses, not 0.0.0.0 — binding all interfaces claims port 53
+        # on every podman bridge gateway too (e.g. 10.89.0.1 for the "immich" network),
+        # which stops aardvark-dns (container name resolution) from starting.
+        bind_hosts    = [ "10.0.0.5" "10.134.0.1" "127.0.0.1" "10.0.0.1"];
         port          = 53;
         upstream_dns  = [ "1.1.1.1" "1.0.0.1" ];
         bootstrap_dns = [ "1.1.1.1" "1.0.0.1" ];
