@@ -90,7 +90,7 @@ The USB DAS uses a JMicron bridge that doesn't pass through each drive's real se
    ```
    `storage/media` is a **shared** dataset, not per-service: Jellyfin, Samba, and any future download automation (Sonarr/Radarr/qBittorrent-style tools) all read/write the same `movies/`, `tv/`, `downloads/` tree. This matters because ZFS datasets are separate filesystems even within one pool — hardlinks (how those download tools do an instant, no-copy move from `downloads/` into the library) don't work *across* datasets, only within one. Keeping them all under `storage/media` is what makes that work. Once Jellyfin's/Samba's NixOS modules exist, add their service users to the `media` group instead of relying on `galac`/`mir` membership.
 
-   Immich/Paperless/Navidrome datasets stay root-owned until those services' NixOS modules exist and their real service-user UIDs are known. Add more datasets any time with `zfs create`.
+   Paperless/Navidrome datasets stay root-owned until those services' NixOS modules exist and their real service-user UIDs are known. Immich's subpaths are chowned automatically by `systemd.tmpfiles.rules` — see the Immich section below. Add more datasets any time with `zfs create`.
 5. Point each user's Syncthing folders (via its web GUI, not Nix) at `/mnt/storage/syncthing/<user>/...`.
 
 ### Common Commands
@@ -190,3 +190,28 @@ Adguard Home serves two purposes: It blocks ads and trackers on the local networ
 #### Nix Config
 1. Set a password hash using `htpasswd -nbB admin 'your-chosen-password' | cut -d: -f2` for the admin account. Otherwise there will not be an admin account
 2. Add DNS rewrites for local services
+
+## Immich
+Self-hosted photo backup, running as podman containers via `virtualisation.oci-containers` (upstream's official images — nixpkgs' `immich` package trails releases, so it isn't used). VPN-only: reachable at `https://photos.audioboss.win` only from a WireGuard client; not in the DDNS domain list, so it isn't publicly resolvable at all.
+
+### First Time Setup
+The DB password is NOT included in the nix config (this repo is public). Runbook to set it up on a fresh machine:
+
+1. On your Mac, create a local file (not in this repo) containing:
+   ```
+   DB_PASSWORD=<random password, letters/numbers only>
+   POSTGRES_PASSWORD=<same value>
+   ```
+2. Copy it to lovefield and lock it down. `--chmod=600` requires GNU rsync (macOS's built-in rsync doesn't support the bare-octal form, use `Fu=rw,Fgo=` instead); `-t` on ssh forces a TTY so the sudo password prompt works:
+   ```zsh
+   rsync -av --chmod=Fu=rw,Fgo= ./immich-db.env galac@10.0.0.5:/tmp/immich-db.env
+   ssh -t galac@10.0.0.5 'sudo install -o root -g root -m 600 /tmp/immich-db.env /etc/immich/db.env && rm /tmp/immich-db.env'
+   ```
+3. Rebuild. `systemctl status podman-immich-postgres podman-immich-redis podman-immich-server` should all show `active (running)`. Without `/etc/immich/db.env` in place, the containers fail to start with a clear "no such file" error.
+4. Visit `https://photos.audioboss.win` over the VPN and complete Immich's first-run admin account setup.
+
+### Storage
+Uploads live at `/mnt/storage/immich/upload`; Postgres data at `/mnt/storage/immich/postgres` (uid 999, matching the `ghcr.io/immich-app/postgres` image's postgres user). Both directories are created automatically via `systemd.tmpfiles.rules` in `configuration.nix`.
+
+### Upgrading
+The `immich-server`/`immich-postgres` image tags are pinned explicitly in `configuration.nix` (not `:release`) for controlled upgrades. Check https://docs.immich.app/install/upgrading before bumping — occasionally a version requires a specific upgrade path or manual step.

@@ -146,7 +146,8 @@ in
     # DDNS updates since VPN clients resolve *.audioboss.win via AdGuard Home (local IP)
     # and WAN clients get 403 from Caddy regardless of what Cloudflare returns.
     "music.audioboss.win"
-    "photos.audioboss.win"
+    # photos.audioboss.win intentionally omitted — Immich is VPN-only (see caddy-server.expose),
+    # resolved locally via AdGuard Home's *.audioboss.win rewrite; no public DNS needed.
     "git.audioboss.win"
     "paper.audioboss.win"
     "lovefield.audioboss.win"
@@ -194,6 +195,70 @@ in
   services.jellyfin.enable = true;
   services.jellyfin.openFirewall = true;  # opens 8096 (HTTP) and 8920 (HTTPS)
 
+  # Immich (self-hosted photo backup), VPN-only.
+  # DB secret lives at /etc/immich/db.env (root:root, chmod 600) — placed manually via
+  # rsync from the Mac, never committed to this repo. Must contain:
+  #   DB_PASSWORD=<random>
+  #   POSTGRES_PASSWORD=<same random value>
+  virtualisation.podman.enable = true;
+  virtualisation.oci-containers.backend = "podman";
+
+  systemd.services.init-immich-network = {
+    description = "Create podman network for Immich containers";
+    after       = [ "network.target" ];
+    wantedBy    = [ "multi-user.target" ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      ${pkgs.podman}/bin/podman network exists immich || \
+        ${pkgs.podman}/bin/podman network create immich
+    '';
+  };
+
+  systemd.tmpfiles.rules = [
+    "d /mnt/storage/immich/upload 0755 root root -"
+    "d /mnt/storage/immich/postgres 0700 999 999 -"  # immich-app/postgres image runs as uid 999
+  ];
+
+  virtualisation.oci-containers.containers = {
+    immich-postgres = {
+      image = "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0";
+      autoStart = true;
+      environment = {
+        POSTGRES_USER = "postgres";
+        POSTGRES_DB   = "immich";
+        POSTGRES_INITDB_ARGS = "--data-checksums";
+      };
+      environmentFiles = [ "/etc/immich/db.env" ];  # POSTGRES_PASSWORD
+      volumes = [ "/mnt/storage/immich/postgres:/var/lib/postgresql/data" ];
+      extraOptions = [ "--network=immich" "--shm-size=128mb" ];
+    };
+
+    immich-redis = {
+      image = "docker.io/valkey/valkey:9";
+      autoStart = true;
+      extraOptions = [ "--network=immich" ];
+    };
+
+    immich-server = {
+      image = "ghcr.io/immich-app/immich-server:v3.0.3";  # pin explicit version; check docs.immich.app/install/upgrading before bumping
+      autoStart = true;
+      environment = {
+        DB_HOSTNAME    = "immich-postgres";
+        DB_USERNAME    = "postgres";
+        DB_DATABASE_NAME = "immich";
+        REDIS_HOSTNAME = "immich-redis";
+      };
+      environmentFiles = [ "/etc/immich/db.env" ];  # DB_PASSWORD
+      volumes = [
+        "/mnt/storage/immich/upload:/data"
+        "/etc/localtime:/etc/localtime:ro"
+      ];
+      ports = [ "127.0.0.1:2283:2283" ];  # loopback only — Caddy is the only consumer
+      extraOptions = [ "--network=immich" ];
+      dependsOn = [ "immich-postgres" "immich-redis" ];
+    };
+  };
+
   services.caddy-server = {
     enable    = true;
     domain    = "audioboss.win";
@@ -204,8 +269,8 @@ in
       { subdomain = "sync-mir";   port = 8385; vpnOnly = true; }  # Syncthing (mir)
       { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
       { subdomain = "dns";        port = 3000; }
+      { subdomain = "photos";     port = 2283; }  # Immich
       # { subdomain = "music";   port = 4533; }   # Navidrome
-      # { subdomain = "photos";  port = 2283; }   # Immich
       # { subdomain = "docs";    port = 28981; }  # Paperless
       # { subdomain = "git";     port = 3000; }   # Forgejo
     ];
