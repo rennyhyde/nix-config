@@ -27,6 +27,7 @@
     ripgrep
     eza
     jq
+    btop
   ];
 
   # ── SSH: key-only, no root login ──────────────────────────────────────────
