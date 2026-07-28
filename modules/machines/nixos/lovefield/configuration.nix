@@ -44,6 +44,7 @@ in
     ../../../services/caddy           # defines options.services.caddy-server
     ../../../services/hello-world     # Caddy smoke test — remove once real services are up
     ../../../services/syncthing
+    ../../../services/sundrop-cafe    # event site + RSVP CSV backend
   ];
 
   networking.hostName = "lovefield";
@@ -79,12 +80,13 @@ in
   # Fan control (MSI GF63) — EC firmware 16R3EMS1.101 unsupported by both
   # in-kernel and BeardOverflow msi-ec. Using ec_sys for direct EC register access.
   # fanControlScript (defined above) monitors CPU Package temp and writes to EC offset 152.
-  environment.systemPackages = with pkgs; [ 
-    lm_sensors 
-    xxd 
+  environment.systemPackages = with pkgs; [
+    lm_sensors
+    xxd
     gawk
     openssl
     dig
+    cloudflared
   ];
   boot.kernelModules = [ "ec_sys" ];
   boot.extraModprobeConfig = "options ec_sys write_support=1";
@@ -129,6 +131,28 @@ in
   };
 
   services.hello-world.enable = true;
+
+  services.sundrop-cafe.enable = true;
+
+  # Public exposure via a dashboard-managed Cloudflare Tunnel — no router
+  # port-forwarding needed. The tunnel itself (public hostname -> this
+  # service) is configured entirely in the Cloudflare Zero Trust dashboard;
+  # this just runs the connector with the token it gives you.
+  # One-time manual setup: create the tunnel + public hostname in the
+  # dashboard, then put the connector token in /etc/cloudflared/sundrop-token.env
+  # as TUNNEL_TOKEN=... (chmod 600, not committed) before rebuilding.
+  systemd.services.cloudflared-sundrop = {
+    description = "Cloudflare Tunnel connector (sundrop, dashboard-managed)";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network.target" ];
+    serviceConfig = {
+      Type            = "simple";
+      EnvironmentFile = "/etc/cloudflared/sundrop-token.env";
+      ExecStart       = "${pkgs.cloudflared}/bin/cloudflared tunnel run";
+      Restart         = "always";
+      RestartSec      = "5s";
+    };
+  };
 
   # services.syncthing-users = {
   #   enable    = true;

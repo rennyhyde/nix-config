@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sundrop Cafe</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="ripple-canvas"></canvas>
+
+  <!-- Lock screen -->
+  <div id="lock-screen">
+    <h1 class="site-title small">Sundrop Cafe</h1>
+    <p class="lock-tagline">Sunday 7.2.26. One day only.</p>
+    <form id="lock-form" autocomplete="off" novalidate>
+      <input
+        type="password"
+        id="lock-password"
+        name="password"
+        placeholder="Secret password"
+        autocomplete="off"
+        required
+      >
+      <button type="submit">Unlock</button>
+    </form>
+    <p id="lock-error" class="lock-error" hidden>Not quite — try again.</p>
+  </div>
+
+  <!-- Main content, hidden until unlocked -->
+  <main id="site-content" hidden>
+
+    <header class="hero">
+      <h1 class="site-title">Sundrop Cafe</h1>
+      <p class="grand-opening">Grand Opening</p>
+      <p class="subtitle">
+        One day only popup cafe featuring local musicians, art installations, and a vibrant menu.
+        All proceeds support
+        <a href="https://www.dallasforchange.org/" target="_blank" rel="noopener">Dallas for Change</a>
+      </p>
+    </header>
+
+    <section class="panel" id="performers">
+      <h2>Music Artists Performing</h2>
+
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⏃⌰⟟⟒⋏ ⍜⋏⟒</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⌰⏃⏁⟒ ⌇⏁⏃☌⟒</span>
+      </div>
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⋏⟒⍜⋏ ☊⊑⍜⟟⍀</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⋔⟟⎅⋏⟟☌⊑⏁</span>
+      </div>
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⏁⊑⟒ ⏚⍀⟒⏃⌽⟒⍀⌇</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⟒⏃⍀⌰⊬ ⌇⟒⏁</span>
+      </div>
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⌽⟟⋏⏁⌇⚚☌⟟⍀⌰</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">☊⌰⍜⌇⟒⍀</span>
+      </div>
+
+      <p class="coming-soon">Lineup will be revealed throughout the week.</p>
+    </section>
+
+    <section class="panel" id="menu">
+      <h2>Cafe Menu</h2>
+
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⌰⚚⋏⏃⍀ ⏚⍀⟒⚫</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⋏⋏ ⎅⍜⏁⌇</span>
+      </div>
+      <p class="alien-text menu-item-desc" aria-hidden="true">
+        ⏃⍀⍜⋔⏃ ⎅⏃⏁⏃ ☊⍜⍀⍀⚍⌿⏁⟒⎅ — ⍀⟒⌰⟟☊ ⎅⟒☊⍀⊬⌿⏁ ⟟⋏ ⌿⍀⍜☌⍀⟒⌇⌇
+      </p>
+
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⏚⍀⟒⍒ ⌰⟟⌇⏁</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⌿⟒⋏⎅⟟⋏☌</span>
+      </div>
+      <p class="alien-text menu-item-desc" aria-hidden="true">
+        ⌇⟟☌⋏⏃⏁⚍⍀⟒ ⏚⟒⟟⋏☌ ☌⌰⟟⏁☊⊑⟒⎅ ⟟⋏⏁⍜ ⏚⟟⋏⏃⍀⊬ ⟒⋏⏁⍀⍜⌿⊬
+      </p>
+
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⋏⍜⎅⟒ ☊⌰⚍⌇⏁⟒⍀</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⚍⋏⌇⏁⏃⏚⌰⟒</span>
+      </div>
+      <p class="alien-text menu-item-desc" aria-hidden="true">
+        ⍀⟒⋔⏃⌿⌿⟟⋏☌ ⟟⋏ ⌿⍀⍜☌⍀⟒⌇⌇ — ⏚⍀⟒⏃⌽⟟⋏☌ ⟟⋏⏁⍜ ⌇⚚⏚⌇⟒⏁⌇
+      </p>
+
+      <div class="leader-row">
+        <span class="leader-title alien-text" aria-hidden="true">⏁⍀⏃⋏⌇⋔⟟⌇⌇⟟⍜⋏</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author alien-text" aria-hidden="true">⎅⟒☊⍀⊬⌿⏁⟟⋏☌</span>
+      </div>
+      <p class="alien-text menu-item-desc" aria-hidden="true">
+        ⌇⍜⍜⋏ ⏃⍀⏁⟟⌇⏁⌇ ⏚⟒⟟⋏☌ ⟁⏃⌰⟟⟒⋏ ⌰⍜⌇⏁ ⟟⋏ ⏁⍀⏃⋏⌇⋔⟟⌇⌇⟟⍜⋏
+      </p>
+
+      <p class="coming-soon">Menu will be revealed throughout the week.</p>
+    </section>
+
+    <section class="panel" id="art">
+      <h2>Art Installations</h2>
+      <div class="leader-row">
+        <span class="leader-title">Envirocube</span>
+        <span class="leader-fill" aria-hidden="true"></span>
+        <span class="leader-author">Renny Hyde et al.</span>
+      </div>
+      <p class="coming-soon">More to come.</p>
+    </section>
+
+    <section class="panel" id="entry">
+      <h2>Entry Instructions</h2>
+      <p class="coming-soon">Written instructions and a walkthrough video will be available soon.</p>
+      <div class="video-placeholder">
+        <span>Entry video tbd</span>
+      </div>
+    </section>
+
+    <section class="panel" id="parking">
+      <h2>Parking Instructions</h2>
+      <p class="coming-soon">Written instructions and a walkthrough video will be available soon.</p>
+      <div class="video-placeholder">
+        <span>Parking instruction video tbd</span>
+      </div>
+    </section>
+
+    <section class="panel" id="rsvp">
+      <h2>RSVP</h2>
+      <form id="rsvp-form" novalidate>
+        <label>
+          Name
+          <input type="text" name="name" id="rsvp-name" required autocomplete="name">
+        </label>
+        <label>
+          Phone number
+          <input type="tel" name="phone" id="rsvp-phone" required autocomplete="tel" placeholder="(555) 555-5555">
+        </label>
+        <fieldset class="coming-toggle">
+          <legend>Are you coming?</legend>
+          <label class="radio">
+            <input type="radio" name="coming" value="yes" checked> Yay! I'll be there!
+          </label>
+          <label class="radio">
+            <input type="radio" name="coming" value="maybe"> Maybe!
+          </label>
+          <label class="radio">
+            <input type="radio" name="coming" value="no"> Can't make it :/
+          </label>
+        </fieldset>
+        <button type="submit">Send RSVP</button>
+      </form>
+      <p id="rsvp-status" class="rsvp-status" hidden></p>
+    </section>
+
+  </main>
+
+  <script src="ripple.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
