@@ -14,7 +14,8 @@
   environment.systemPackages = with pkgs; [ 
     git 
     curl 
-    wget 
+    wget
+    immich-go
   ];
   
   programs.zsh.enable = true;
