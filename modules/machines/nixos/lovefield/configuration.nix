@@ -154,13 +154,13 @@ in
     };
   };
 
-  # services.syncthing-users = {
-  #   enable    = true;
-  #   instances = [
-  #     { user = "galac"; guiPort = 8384; }  # will eventually migrate to a different server
-  #     { user = "mir";   guiPort = 8385; }
-  #   ];
-  # };
+  services.syncthing-users = {
+    enable    = true;
+    instances = [
+      { user = "galac"; guiPort = 8384; }  # will eventually migrate to a different server
+      { user = "mir";   guiPort = 8385; }
+    ];
+  };
 
   services.cloudflare-dyndns.domains = [
     "audioboss.win"
@@ -292,8 +292,8 @@ in
     email     = "outpost-admin@proton.me";
     vpnSubnet = "10.134.0.0/24";
     expose = [
-      { subdomain = "sync-galac"; port = 8384; vpnOnly = true; }  # Syncthing (galac)
-      { subdomain = "sync-mir";   port = 8385; vpnOnly = true; }  # Syncthing (mir)
+      { subdomain = "sync-galac"; port = 8384; }  # Syncthing (galac)
+      { subdomain = "sync-mir";   port = 8385; }  # Syncthing (mir)
       { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
       { subdomain = "dns";        port = 3000; }
       { subdomain = "photos";     port = 2283; }  # Immich
