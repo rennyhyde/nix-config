@@ -1,15 +1,22 @@
 @font-face {
-  font-family: 'Feroniapi';
-  src: url('fonts/Feroniapi-MediumItalic.woff2') format('woff2'),
-       url('fonts/Feroniapi-MediumItalic.woff') format('woff');
-  font-weight: 500;
-  font-style: italic;
+  font-family: 'IBM Plex Sans';
+  src: url('fonts/IBMPlexSans-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Saint Andrews Queen';
   src: url('fonts/SaintAndrewsQueen.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Silom';
+  src: url('fonts/Silom.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -31,7 +38,8 @@
   --bg-overlay: rgba(11, 19, 48, 0.6);
 
   --font-title: 'Saint Andrews Queen', cursive;
-  --font-body: 'Feroniapi', Georgia, 'Times New Roman', serif;
+  --font-body: 'IBM Plex Sans', Arial, Helvetica, sans-serif;
+  --font-heading: 'Silom', Arial, Helvetica, sans-serif;
   --font-alien: 'Courier New', monospace;
 }
 
@@ -46,10 +54,6 @@ html, body {
   background: var(--bg-dark-blue);
   color: var(--gold-pale);
   font-family: var(--font-body);
-  font-weight: 600;
-  /* Feroniapi is a fairly thin italic — this duplicates each glyph with a
-     tiny horizontal offset to fill in the strokes and read as bolder. */
-  text-shadow: -0.025em 0 0 currentColor, 0.025em 0 0 currentColor;
 }
 
 #ripple-canvas {
@@ -185,15 +189,51 @@ html, body {
 }
 
 .panel h2 {
-  font-family: var(--font-body);
+  font-family: var(--font-heading);
   color: var(--gold-pigment);
   font-weight: 700;
-  /* Feroniapi only ships one weight — a stroke bulks up the heading beyond
-     what font-weight alone (synthetic bolding) gets you. */
   -webkit-text-stroke: 0.6px var(--gold-pigment);
   paint-order: stroke fill;
   margin-top: 0;
   font-size: 1.4rem;
+}
+
+.panel h3 {
+  font-family: var(--font-heading);
+  color: var(--gold-pigment);
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.panel h3:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.artist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.menu-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--gold-faint-alt);
+}
+
+.bean {
+  margin-top: 0.6rem;
+}
+
+.bean-name {
+  margin: 0;
+  font-weight: 700;
+  color: var(--gold-pale);
 }
 
 /* ---------- Dot-leader row (installation title ... author) ---------- */
@@ -223,7 +263,8 @@ html, body {
 }
 
 .leader-row + .leader-row,
-.leader-row + .menu-item-desc {
+.leader-row + .menu-item-desc,
+.menu-item-desc + .leader-row {
   margin-top: 0.6rem;
 }
 
@@ -245,6 +286,7 @@ html, body {
 .menu-item-desc {
   margin: 0.3rem 0 0;
   font-size: 0.85rem;
+  color: var(--gold-faint-alt);
 }
 
 @keyframes alien-shimmer {
