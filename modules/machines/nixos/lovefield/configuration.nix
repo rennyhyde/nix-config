@@ -222,7 +222,7 @@ in
   services.jellyfin.enable = true;
   services.jellyfin.openFirewall = true;  # opens 8096 (HTTP) and 8920 (HTTPS)
 
-  services.Navidrome = {
+  services.navidrome = {
     enable = true;
     openFirewall = true;  # Port 4533
   };
