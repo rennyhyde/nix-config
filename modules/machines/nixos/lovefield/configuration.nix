@@ -225,6 +225,10 @@ in
   services.navidrome = {
     enable = true;
     openFirewall = true;  # Port 4533
+    # Required: navidrome runs chrooted (RootDirectory=/run/navidrome). Without this,
+    # /mnt/storage/media/music isn't bind-mounted into the sandbox at all, so any
+    # library path under it is "invalid" regardless of Unix permissions.
+    settings.MusicFolder = "/mnt/storage/media/music";
   };
 
   # Immich (self-hosted photo backup), VPN-only.
