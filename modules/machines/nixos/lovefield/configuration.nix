@@ -302,7 +302,7 @@ in
       { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
       { subdomain = "dns";        port = 3000; }
       { subdomain = "photos";     port = 2283; }  # Immich
-      # { subdomain = "music";   port = 4533; }   # Navidrome
+      { subdomain = "music";      port = 4533; }   # Navidrome
       # { subdomain = "docs";    port = 28981; }  # Paperless
       # { subdomain = "git";     port = 3000; }   # Forgejo
     ];
