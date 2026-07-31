@@ -222,6 +222,11 @@ in
   services.jellyfin.enable = true;
   services.jellyfin.openFirewall = true;  # opens 8096 (HTTP) and 8920 (HTTPS)
 
+  services.Navidrome = {
+    enable = true;
+    openFirewall = true;  # Port 4533
+  };
+
   # Immich (self-hosted photo backup), VPN-only.
   # DB secret lives at /etc/immich/db.env (root:root, chmod 600) — placed manually via
   # rsync from the Mac, never committed to this repo. Must contain:
