@@ -154,13 +154,13 @@ in
     };
   };
 
-  services.syncthing-users = {
-    enable    = true;
-    instances = [
-      { user = "galac"; guiPort = 8384; }  # will eventually migrate to a different server
-      { user = "mir";   guiPort = 8385; }
-    ];
-  };
+  # services.syncthing-users = {
+  #   enable    = true;
+  #   instances = [
+  #     { user = "galac"; guiPort = 8384; }  # will eventually migrate to a different server
+  #     { user = "mir";   guiPort = 8385; }
+  #   ];
+  # };
 
   services.cloudflare-dyndns.domains = [
     "audioboss.win"

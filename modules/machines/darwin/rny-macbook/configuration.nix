@@ -60,6 +60,7 @@
       "touchdesigner"
       "obs"
       "balenaetcher"
+      "syncthing-app"
 
       # Not on homebrew or nix:
       #
