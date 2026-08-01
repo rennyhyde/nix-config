@@ -219,6 +219,30 @@ html, body {
   gap: 0.5rem;
 }
 
+.instructions-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  line-height: 1.5;
+}
+
+.instructions-list code {
+  font-family: var(--font-alien);
+  background: var(--input-bg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+}
+
+.entry-video {
+  margin-top: 1.25rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--gold-dim);
+  display: block;
+}
+
 .menu-note {
   margin: 0.5rem 0 0;
   font-size: 0.85rem;
@@ -299,20 +323,6 @@ html, body {
   font-size: 0.9rem;
   color: var(--gold-faint-alt);
   font-style: italic;
-}
-
-.video-placeholder {
-  margin-top: 1rem;
-  aspect-ratio: 16 / 9;
-  border: 1px dashed var(--gold-dim);
-  border-radius: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gold-faint-alt);
-  font-size: 0.9rem;
-  text-align: center;
-  padding: 1rem;
 }
 
 /* ---------- RSVP form ---------- */

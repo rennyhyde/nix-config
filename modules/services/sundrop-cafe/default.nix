@@ -7,6 +7,11 @@ let
   siteDir = ./site;
 
   rsvpScript = ./rsvp_server.py;
+
+  # Large media (event videos) lives outside the nix store / git history —
+  # placed manually on lovefield, not committed to the repo. Caddy serves it
+  # straight off disk at /media/*.
+  mediaDir = "/var/lib/sundrop-media";
 in {
   options.services.sundrop-cafe = {
     enable = lib.mkEnableOption "Sundrop Cafe event site (static site + RSVP CSV backend)";
@@ -20,16 +25,25 @@ in {
 
   # Adds sundrop.<domain> to Caddy directly (like hello-world) — only
   # meaningful when caddy-server is also enabled. The whole domain is a
-  # static file_server, with just /api/rsvp routed to the local RSVP backend.
+  # static file_server, with /api/rsvp routed to the local RSVP backend and
+  # /media/* served from mediaDir (outside the nix store — see above).
   config = lib.mkIf cfg.enable {
+    systemd.tmpfiles.rules = [
+      "d ${mediaDir} 0755 root root -"
+    ];
+
     services.caddy.virtualHosts = lib.mkIf config.services.caddy-server.enable {
       "sundrop.${config.services.caddy-server.domain}" = {
         useACMEHost = config.services.caddy-server.domain;
         extraConfig = ''
-          root * ${siteDir}
+          handle_path /media/* {
+            root * ${mediaDir}
+            file_server
+          }
           handle /api/rsvp {
             reverse_proxy localhost:${toString cfg.rsvpPort}
           }
+          root * ${siteDir}
           file_server
         '';
       };
