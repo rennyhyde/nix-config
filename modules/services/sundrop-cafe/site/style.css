@@ -178,6 +178,13 @@ html, body {
   color: var(--gold-pigment);
 }
 
+.event-details {
+  margin-top: 1.25rem;
+  color: var(--gold-pale);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 /* ---------- Panels ---------- */
 
 .panel {
