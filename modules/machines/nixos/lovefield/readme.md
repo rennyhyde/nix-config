@@ -191,8 +191,10 @@ Adguard Home serves two purposes: It blocks ads and trackers on the local networ
 1. Set a password hash using `htpasswd -nbB admin 'your-chosen-password' | cut -d: -f2` for the admin account. Otherwise there will not be an admin account
 2. Add DNS rewrites for local services
 
+**Important:** `mutableSettings = false` — AdGuard's config (`/var/lib/AdGuardHome/AdGuardHome.yaml`) is fully Nix-managed and gets overwritten on every `nixos-rebuild switch`. Any changes made through the AdGuard web UI (new rewrites, filter rules, DHCP settings, etc.) will be **silently reverted** on the next rebuild unless they're also added to `services.adguardhome.settings` in `configuration.nix`. Make changes in the Nix config, not the UI, if they need to persist.
+
 ## Immich
-Self-hosted photo backup, running as podman containers via `virtualisation.oci-containers` (upstream's official images — nixpkgs' `immich` package trails releases, so it isn't used). VPN-only: reachable at `https://photos.audioboss.win` only from a WireGuard client; not in the DDNS domain list, so it isn't publicly resolvable at all.
+Self-hosted photo backup, running as podman containers via `virtualisation.oci-containers` (upstream's official images — nixpkgs' `immich` package trails releases, so it isn't used). Reachable at `https://photos.audioboss.win` from the LAN or VPN (resolved locally by AdGuard's `*.audioboss.win` rewrite); not in the `cloudflare-dyndns` domain list, so it has no public DNS record and isn't reachable from the WAN.
 
 ### First Time Setup
 The DB password is NOT included in the nix config (this repo is public). Runbook to set it up on a fresh machine:
@@ -215,3 +217,24 @@ Uploads live at `/mnt/storage/immich/upload`; Postgres data at `/mnt/storage/imm
 
 ### Upgrading
 The `immich-server`/`immich-postgres` image tags are pinned explicitly in `configuration.nix` (not `:release`) for controlled upgrades. Check https://docs.immich.app/install/upgrading before bumping — occasionally a version requires a specific upgrade path or manual step.
+
+### Machine Learning (intentionally not deployed)
+The `immich-machine-learning` container (smart search, face recognition, OCR) is not deployed — CPU-only inference isn't worth the thermal load on this hardware (see the fan-control hack above). `podman-immich-server` logs will show repeated `Machine learning request ... failed for all URLs` / `Machine learning server became unhealthy (http://immich-machine-learning:3003)` warnings — this is expected and harmless, Immich just falls back to not having those features. Can be added later (matching container shape as the other three) with zero data migration if the hardware situation changes.
+
+# Known Issues
+
+## `*.audioboss.win` breaks in Firefox/Chrome but works in Safari
+**Symptom:** A local service (e.g. `photos.audioboss.win`) loads fine in Safari, but Chrome says the address is unreachable and Firefox returns a `500 Internal Server Error` — even on the LAN with no VPN.
+
+**Cause:** Firefox ships with DNS-over-HTTPS (DoH) enabled by default, pointed at a public resolver (Cloudflare). Chrome's "Secure DNS" can behave similarly. Both bypass the network's actual DNS server entirely, so they never see AdGuard Home's `*.audioboss.win → 10.0.0.5` rewrite — instead they get whatever (if anything) the public `audioboss.win` Cloudflare zone has for that name, which is unrelated to lovefield and can respond in confusing, browser-specific ways. Safari respects the system/network DNS resolver and isn't affected.
+
+**Fix:**
+- **Firefox** auto-disables DoH on a network if a specific canary domain (`use-application-dns.net`) fails to resolve. AdGuard is configured (`services.adguardhome.settings.user_rules` in `configuration.nix`) to block that domain, which fixes this automatically for every device on the LAN/VPN — no per-device Firefox config needed.
+- **Chrome** doesn't honor that canary and needs a manual per-device toggle: `chrome://settings/security` → **Use secure DNS** → set to "With your current service provider" (or off).
+
+**Diagnosing DNS issues like this in general:** compare `dig <name>` (whatever the system resolver returns) against `dig <name> @10.0.0.5` (AdGuard directly). If they differ, something on the client is bypassing the network's DNS server (DoH, a VPN profile's DNS override, manually-set DNS servers, etc.) rather than lovefield being misconfigured.
+
+## AdGuard Home and podman container networking fight over port 53
+If AdGuard's `dns.bind_hosts` is set to `0.0.0.0` (bind all interfaces), it claims port 53 on *every* interface — including the gateway IP of any podman bridge network (e.g. `10.89.0.1`). This silently breaks `aardvark-dns`, podman's container-name DNS resolution (what lets `immich-server` find `immich-postgres` by name), with errors like `failed to bind udp listener on 10.89.0.1:53: Address already in use`.
+
+Fixed by binding AdGuard to specific addresses instead of `0.0.0.0` (`services.adguardhome.settings.dns.bind_hosts` in `configuration.nix`). Worth remembering if a *future* podman/oci-container service mysteriously can't resolve its sibling containers by name — check `sudo journalctl -u podman-<name> | grep aardvark` for this exact symptom before assuming the container config is wrong.

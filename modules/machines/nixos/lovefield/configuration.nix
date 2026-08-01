@@ -211,6 +211,14 @@ in
           { domain = "*.audioboss.win"; answer = "10.0.0.5"; enabled = true;}
         ];
       };
+      # Firefox (and some Chrome configs) default to DNS-over-HTTPS, which bypasses
+      # this resolver entirely and breaks *.audioboss.win local rewrites (works in
+      # Safari, breaks in Firefox/Chrome — see readme's Known Issues section).
+      # Blocking Firefox's canary domain makes it detect a custom DNS setup and
+      # auto-disable DoH on this network.
+      user_rules = [
+        "||use-application-dns.net^"
+      ];
     };
   };
 
