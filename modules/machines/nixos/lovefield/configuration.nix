@@ -335,10 +335,10 @@ in
     lanSubnet = "10.0.0.0/24";
     expose = [
       { subdomain = "sync-galac"; port = 8384; internalOnly = true;}  # Syncthing (galac)
-      { subdomain = "sync-mir";   port = 8385; }  # Syncthing (mir)
+      { subdomain = "sync-mir";   port = 8385; internalOnly = true;}  # Syncthing (mir)
       { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
-      { subdomain = "dns";        port = 3000; }
-      { subdomain = "photos";     port = 2283; }  # Immich
+      { subdomain = "dns";        port = 3000; internalOnly = true;}
+      { subdomain = "photos";     port = 2283; internalOnly = true;}  # Immich
       { subdomain = "music";      port = 4533; }   # Navidrome
       # { subdomain = "docs";    port = 28981; }  # Paperless
       { subdomain = "git";       port = 1134; }   # Forgejo
