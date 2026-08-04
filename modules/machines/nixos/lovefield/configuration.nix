@@ -224,8 +224,9 @@ in
   };
 
   # Port 53 for AdGuard Home DNS (TCP for large responses, UDP for standard queries).
-  # lovefield is behind router NAT so opening this globally is safe.
-  networking.firewall.allowedTCPPorts = [ 53 ];
+  # 445 for Samba (SMB2+; NetBIOS/139/137/138 intentionally unused, see nmbd.enable = false above).
+  # lovefield is behind router NAT so opening these globally is safe — nothing here is port-forwarded.
+  networking.firewall.allowedTCPPorts = [ 53 445 ];
   networking.firewall.allowedUDPPorts = [ 53 ];
 
   services.jellyfin.enable = true;
@@ -238,6 +239,70 @@ in
     # /mnt/storage/media/music isn't bind-mounted into the sandbox at all, so any
     # library path under it is "invalid" regardless of Unix permissions.
     settings.MusicFolder = "/mnt/storage/media/music";
+  };
+
+  # Samba — LAN/VPN-only private shares, one per user, each restricted to its
+  # owner. Not proxied through Caddy (SMB isn't HTTP); kept internal by binding
+  # only to the loopback/LAN/VPN interfaces below and by the router never
+  # forwarding 445 (same reasoning as WireGuard's 51820 being the only
+  # forwarded port before Forgejo needed 80/443 added).
+  #
+  # No "force user"/"force group" — smbd impersonates the authenticated unix
+  # user for file ops, so ownership on disk just needs to match:
+  #   sudo chown galac:galac /mnt/storage/samba/galac && chmod 700 /mnt/storage/samba/galac
+  #   sudo chown mir:mir     /mnt/storage/samba/mir   && chmod 700 /mnt/storage/samba/mir
+  services.samba = {
+    enable       = true;
+    nmbd.enable    = false;  # legacy NetBIOS browsing — not needed by modern macOS/Windows
+    winbindd.enable = false; # no AD/domain integration
+    settings = {
+      global = {
+        "server string"       = "lovefield";
+        "netbios name"        = "lovefield";
+        "security"            = "user";
+        "min protocol"        = "SMB2";
+        "map to guest"        = "never";
+        "interfaces"          = "lo enp3s0 wg0";
+        "bind interfaces only" = true;
+      };
+      galac = {
+        path             = "/mnt/storage/samba/galac";
+        browseable       = "yes";
+        "read only"      = "no";
+        "valid users"    = "galac";
+        "create mask"    = "0600";
+        "directory mask" = "0700";
+      };
+      mir = {
+        path             = "/mnt/storage/samba/mir";
+        browseable       = "yes";
+        "read only"      = "no";
+        "valid users"    = "mir";
+        "create mask"    = "0600";
+        "directory mask" = "0700";
+      };
+    };
+  };
+
+  # mDNS/Bonjour so lovefield shows up under Finder > Network without typing an IP.
+  services.avahi = {
+    enable   = true;
+    nssmdns4 = true;
+    publish = {
+      enable       = true;
+      userServices = true;
+    };
+    extraServiceFiles.smb = ''
+      <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+      <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+      <service-group>
+        <name replace-wildcards="yes">%h</name>
+        <service>
+          <type>_smb._tcp</type>
+          <port>445</port>
+        </service>
+      </service-group>
+    '';
   };
 
   # Immich (self-hosted photo backup), VPN-only.
@@ -345,17 +410,23 @@ in
     ];
   };
 
+  # Declaring this (rather than the manual `groupadd media` from the storage
+  # runbook) means a fresh install gets correct /mnt/storage/media group
+  # ownership without a manual step. gid intentionally unset — matches
+  # whatever the group already has from the manual setup on lovefield itself.
+  users.groups.media = { };
+
   users.users.galac = {
     isNormalUser = true;
     description  = "galac";
-    extraGroups  = [ "networkmanager" "wheel" ];
+    extraGroups  = [ "networkmanager" "wheel" "media" ];
     shell        = pkgs.zsh;
   };
 
   users.users.mir = {
     isNormalUser = true;
     description  = "mir";
-    extraGroups  = [ "networkmanager" "wheel" ];
+    extraGroups  = [ "networkmanager" "wheel" "media" ];
     shell        = pkgs.zsh;
     # Password is locked until set manually: sudo passwd mir
   };
