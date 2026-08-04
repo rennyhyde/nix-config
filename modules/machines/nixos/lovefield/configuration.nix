@@ -241,6 +241,14 @@ in
     settings.MusicFolder = "/mnt/storage/media/music";
   };
 
+  # Second music tree (synced separately via syncthing) isn't covered by
+  # services.navidrome.settings.MusicFolder above, which only bind-mounts a single
+  # path into the chroot — bind this one in manually, same as the module does for
+  # MusicFolder.
+  systemd.services.navidrome.serviceConfig.BindReadOnlyPaths = [
+    "/mnt/storage/syncthing/galac/music-library"
+  ];
+
   # Samba — LAN/VPN-only private shares, one per user, each restricted to its
   # owner. Not proxied through Caddy (SMB isn't HTTP); kept internal by binding
   # only to the loopback/LAN/VPN interfaces below and by the router never
@@ -248,9 +256,11 @@ in
   # forwarded port before Forgejo needed 80/443 added).
   #
   # No "force user"/"force group" — smbd impersonates the authenticated unix
-  # user for file ops, so ownership on disk just needs to match:
-  #   sudo chown galac:galac /mnt/storage/samba/galac && chmod 700 /mnt/storage/samba/galac
-  #   sudo chown mir:mir     /mnt/storage/samba/mir   && chmod 700 /mnt/storage/samba/mir
+  # user for file ops, so ownership on disk just needs to match. Both galac and
+  # mir are isNormalUser accounts with no personal group (primary group is the
+  # shared "users" group), so group ownership is "users", not the username:
+  #   sudo chown galac:users /mnt/storage/samba/galac && chmod 700 /mnt/storage/samba/galac
+  #   sudo chown mir:users   /mnt/storage/samba/mir   && chmod 700 /mnt/storage/samba/mir
   services.samba = {
     enable       = true;
     nmbd.enable    = false;  # legacy NetBIOS browsing — not needed by modern macOS/Windows
