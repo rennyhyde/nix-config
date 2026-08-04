@@ -87,6 +87,7 @@ in
     openssl
     dig
     cloudflared
+    config.services.forgejo.package  # same binary forgejo.service runs, for admin CLI use
   ];
   boot.kernelModules = [ "ec_sys" ];
   boot.extraModprobeConfig = "options ec_sys write_support=1";
