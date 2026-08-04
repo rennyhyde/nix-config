@@ -333,7 +333,7 @@ in
     email     = "outpost-admin@proton.me";
     vpnSubnet = "10.134.0.0/24";
     expose = [
-      { subdomain = "sync-galac"; port = 8384; VPN-only = true;}  # Syncthing (galac)
+      { subdomain = "sync-galac"; port = 8384; vpnOnly = true;}  # Syncthing (galac)
       { subdomain = "sync-mir";   port = 8385; }  # Syncthing (mir)
       { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
       { subdomain = "dns";        port = 3000; }
