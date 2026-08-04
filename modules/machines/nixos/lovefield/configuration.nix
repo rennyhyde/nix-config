@@ -319,7 +319,7 @@ in
         DOMAIN     = "git.audioboss.win";
         ROOT_URL   = "https://git.audioboss.win/";
         HTTP_ADDR  = "127.0.0.1";  # Caddy is the only consumer, same pattern as Immich
-        HTTP_PORT  = 3000;
+        HTTP_PORT  = 1134;
         DISABLE_SSH = true;
       };
       service.DISABLE_REGISTRATION = true;
@@ -340,7 +340,7 @@ in
       { subdomain = "photos";     port = 2283; }  # Immich
       { subdomain = "music";      port = 4533; }   # Navidrome
       # { subdomain = "docs";    port = 28981; }  # Paperless
-      { subdomain = "git";       port = 3000; }   # Forgejo
+      { subdomain = "git";       port = 1134; }   # Forgejo
     ];
   };
 
