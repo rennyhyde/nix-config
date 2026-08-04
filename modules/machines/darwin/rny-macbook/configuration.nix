@@ -12,6 +12,7 @@
       "/Applications/LinearMouse.app"
       # "/Users/galac/Applications/Flux.app"
       "/Applications/ProtonVPN.app"
+      "/Applications/Bitwarden.app"
     ];
   };
 

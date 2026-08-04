@@ -303,6 +303,29 @@ in
     };
   };
 
+  # Forgejo (self-hosted git forge), bare-bones: sqlite3 db, no mailer,
+  # no Actions (CI) — just repos + LFS. Registration is closed since this
+  # is reachable from the open internet; create accounts manually with
+  #   sudo -u forgejo forgejo admin user create --username <name> --email <email> --password '<pw>' --admin
+  # (drop --admin for non-admin accounts). Forgejo's own SSH server is
+  # disabled to avoid fighting with the system OpenSSH on port 22 — clone
+  # over HTTPS (https://git.audioboss.win/<user>/<repo>.git) for now.
+  services.forgejo = {
+    enable = true;
+    lfs.enable = true;
+    settings = {
+      server = {
+        DOMAIN     = "git.audioboss.win";
+        ROOT_URL   = "https://git.audioboss.win/";
+        HTTP_ADDR  = "127.0.0.1";  # Caddy is the only consumer, same pattern as Immich
+        HTTP_PORT  = 3000;
+        DISABLE_SSH = true;
+      };
+      service.DISABLE_REGISTRATION = true;
+      mailer.ENABLED = false;
+    };
+  };
+
   services.caddy-server = {
     enable    = true;
     domain    = "audioboss.win";
@@ -316,7 +339,7 @@ in
       { subdomain = "photos";     port = 2283; }  # Immich
       { subdomain = "music";      port = 4533; }   # Navidrome
       # { subdomain = "docs";    port = 28981; }  # Paperless
-      # { subdomain = "git";     port = 3000; }   # Forgejo
+      { subdomain = "git";       port = 3000; }   # Forgejo
     ];
   };
 
