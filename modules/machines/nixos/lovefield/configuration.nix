@@ -335,7 +335,7 @@ in
     expose = [
       { subdomain = "sync-galac"; port = 8384; }  # Syncthing (galac)
       { subdomain = "sync-mir";   port = 8385; }  # Syncthing (mir)
-      { subdomain = "media";      port = 8096; }                   # Jellyfin (caddy sanity check)
+      { subdomain = "media";      port = 8096; VPN-only = true;}                   # Jellyfin (caddy sanity check)
       { subdomain = "dns";        port = 3000; }
       { subdomain = "photos";     port = 2283; }  # Immich
       { subdomain = "music";      port = 4533; }   # Navidrome
