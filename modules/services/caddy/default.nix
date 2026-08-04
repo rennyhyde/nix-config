@@ -13,9 +13,10 @@ in {
   #     enable     = true;
   #     domain     = "audioboss.win";
   #     email      = "you@example.com";
-  #     vpnSubnet  = "10.134.0.0/24";   # required if any expose entry has vpnOnly = true
+  #     vpnSubnet  = "10.134.0.0/24";   # required if any expose entry has internalOnly = true
+  #     lanSubnet  = "10.0.0.0/24";     # required if any expose entry has internalOnly = true
   #     expose = [
-  #       { subdomain = "sync";  port = 8384; vpnOnly = true; }
+  #       { subdomain = "sync";  port = 8384; internalOnly = true; }
   #       { subdomain = "music"; port = 4533; }
   #     ];
   #   };
@@ -44,31 +45,39 @@ in {
       type        = lib.types.nullOr lib.types.str;
       default     = null;
       example     = "10.134.0.0/24";
-      description = "CIDR subnet for vpnOnly services. Must match the WireGuard vpnSubnet on this machine.";
+      description = "CIDR subnet for internalOnly services. Must match the WireGuard vpnSubnet on this machine.";
+    };
+
+    lanSubnet = lib.mkOption {
+      type        = lib.types.nullOr lib.types.str;
+      default     = null;
+      example     = "10.0.0.0/24";
+      description = "CIDR subnet for internalOnly services. Must match this machine's LAN.";
     };
 
     expose = lib.mkOption {
       type = lib.types.listOf (lib.types.submodule {
         options = {
-          subdomain = lib.mkOption { type = lib.types.str; };
-          port      = lib.mkOption { type = lib.types.port; };
-          vpnOnly   = lib.mkOption {
+          subdomain    = lib.mkOption { type = lib.types.str; };
+          port         = lib.mkOption { type = lib.types.port; };
+          internalOnly = lib.mkOption {
             type    = lib.types.bool;
             default = false;
-            description = "Restrict to vpnSubnet; all other requests get 403.";
+            description = "Restrict to vpnSubnet/lanSubnet; all other requests get 403.";
           };
         };
       });
       default     = [];
       description = "Services to proxy. Each entry creates <subdomain>.<domain> → localhost:<port>.";
-      example     = [ { subdomain = "sync"; port = 8384; vpnOnly = true; } ];
+      example     = [ { subdomain = "sync"; port = 8384; internalOnly = true; } ];
     };
   };
 
   config = lib.mkIf cfg.enable {
     assertions = [{
-      assertion = !(builtins.any (svc: svc.vpnOnly) cfg.expose) || cfg.vpnSubnet != null;
-      message   = "services.caddy-server.vpnSubnet must be set when any expose entry has vpnOnly = true";
+      assertion = !(builtins.any (svc: svc.internalOnly) cfg.expose)
+                  || cfg.vpnSubnet != null || cfg.lanSubnet != null;
+      message   = "services.caddy-server.vpnSubnet or lanSubnet must be set when any expose entry has internalOnly = true";
     }];
 
     # Build the ACME environment file from the bare token file.
@@ -121,16 +130,28 @@ in {
                 header_up Host "127.0.0.1:${toString svc.port}"
               }
             '';
+            internalSubnets = builtins.filter (s: s != null) [ cfg.vpnSubnet cfg.lanSubnet ];
           in {
             name  = "${svc.subdomain}.${cfg.domain}";
             value = {
               useACMEHost = cfg.domain;
-              extraConfig = if svc.vpnOnly then ''
-                @vpn remote_ip ${cfg.vpnSubnet}
-                handle @vpn {
-                  ${proxy}
+              # Caddyfile directives are NOT executed in the order they're written — Caddy
+              # sorts them into its own fixed global order first. A bare `handle` next to a
+              # bare `respond` at the top level is exactly the case where that reordering can
+              # put `respond` ahead of `handle`, causing the 403 to fire unconditionally even
+              # for matched (internal) requests. Wrapping in `route {}` forces the directives
+              # inside to run in the written order, and pairing `handle`/`handle` (rather than
+              # `handle`/bare `respond`) is Caddy's documented mutual-exclusion idiom.
+              extraConfig = if svc.internalOnly then ''
+                route {
+                  @internal remote_ip ${lib.concatStringsSep " " internalSubnets}
+                  handle @internal {
+                    ${proxy}
+                  }
+                  handle {
+                    respond "Internal network required" 403
+                  }
                 }
-                respond "VPN required" 403
               '' else proxy;
             };
           }
