@@ -43,10 +43,13 @@ in
       isSystemUser = true;
       group        = "qbittorrent-vpn";
       extraGroups  = [ "media" ]; # write access to the shared storage/media dataset
+      home         = cfg.profileDir;
+      createHome   = false; # tmpfiles rule below owns creation, so qBittorrent doesn't need CAP_* to make its own profile dir
     };
 
     systemd.tmpfiles.rules = [
       "d ${cfg.profileDir} 0750 qbittorrent-vpn qbittorrent-vpn -"
+      "d ${cfg.downloadDir} 2775 root media -" # no-op if it already exists with these owners; see storage runbook
     ];
 
     # The actual torrent client. Confined to the protonvpn namespace via
@@ -63,6 +66,12 @@ in
         User                  = "qbittorrent-vpn";
         Group                 = "qbittorrent-vpn";
         NetworkNamespacePath  = "/var/run/netns/${ns}";
+        # NOTE: qBittorrent's --save-path flag only applies to torrents passed
+        # positionally on the command line, not the WebUI's persistent default —
+        # that has to be set once via Options -> Downloads -> Default Save Path
+        # in the WebUI (see readme.md). Nothing in this module manages
+        # qBittorrent.conf, so that one-time setting persists across rebuilds.
+        Environment = "HOME=${cfg.profileDir}";
         ExecStart = ''
           ${pkgs.qbittorrent-nox}/bin/qbittorrent-nox \
             --confirm-legal-notice \
