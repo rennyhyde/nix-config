@@ -221,6 +221,57 @@ The `immich-server`/`immich-postgres` image tags are pinned explicitly in `confi
 ### Machine Learning (intentionally not deployed)
 The `immich-machine-learning` container (smart search, face recognition, OCR) is not deployed — CPU-only inference isn't worth the thermal load on this hardware (see the fan-control hack above). `podman-immich-server` logs will show repeated `Machine learning request ... failed for all URLs` / `Machine learning server became unhealthy (http://immich-machine-learning:3003)` warnings — this is expected and harmless, Immich just falls back to not having those features. Can be added later (matching container shape as the other three) with zero data migration if the hardware situation changes.
 
+## Proton VPN + qBittorrent
+qBittorrent runs confined to an isolated network namespace (`protonvpn`) whose only route out is a Proton VPN WireGuard tunnel — this is a real kill switch, not just "usually tunneled": the namespace has no other interface or route, so if the tunnel drops, qBittorrent's traffic simply stops rather than falling back to the home WAN. Two modules implement this:
+- `modules/services/wireguard-netns` — generic: creates the namespace and brings up a raw WireGuard interface inside it (interface name `pvpn0`, not `wg0` — that name is already taken in the root namespace by the WireGuard *server*, see Known Issues below).
+- `modules/services/qbittorrent-vpn` — runs `qbittorrent-nox` joined to that namespace (`NetworkNamespacePath`), and bridges its WebUI back out to the host loopback via a `systemd-socket-proxyd` unit (mirrors the deluge pattern in Wolfgang's reference config) so Caddy — which lives in the normal namespace — can still reverse-proxy to it at `https://torrent.audioboss.win` (VPN/LAN-only).
+
+Only qBittorrent's traffic goes through Proton this way. Everything else (Jellyfin, Navidrome, Samba, Immich, Forgejo, AdGuard, the WireGuard server's own control traffic) is untouched and keeps using the normal default route. Routing *remote WireGuard clients'* general web traffic through Proton too (so it's hidden from lovefield's home ISP, not just qBittorrent's torrent traffic) is a separate, not-yet-implemented piece — see Open Questions in `CLAUDE.md`.
+
+### First Time Setup
+1. Proton dashboard → Downloads → WireGuard configuration → pick a **P2P** server (P2P icon), enable **NAT-PMP (port forwarding)** if the plan tier supports it (Plus/Unlimited — improves torrent connectivity, not required for correctness).
+2. The downloaded file is a `wg-quick` config; this module wants only the raw peer info, **without** the `Address`/`DNS` lines under `[Interface]`:
+   ```
+   sudo mkdir -p /etc/proton-vpn
+   sudo tee /etc/proton-vpn/qbittorrent.conf <<'EOF'
+   [Interface]
+   PrivateKey = <from Proton's file>
+
+   [Peer]
+   PublicKey = <from Proton's file>
+   Endpoint = <from Proton's file>
+   AllowedIPs = 0.0.0.0/0
+   EOF
+   sudo chmod 600 /etc/proton-vpn/qbittorrent.conf
+   ```
+3. Set `services.wireguard-netns.address` in `configuration.nix` to the `Address = 10.x.x.x/32` line from Proton's original downloaded file, then rebuild.
+4. First WebUI login: grab the auto-generated temporary password with `journalctl -u qbittorrent-nox | grep -i "temporary password"`, then change the username/password immediately under Options → Web UI — nothing in Nix manages `qBittorrent.conf`, so anything set there persists across rebuilds.
+5. Options → Downloads → **Default Save Path** → `/mnt/storage/media/downloads/torrent`. No CLI flag sets this (qBittorrent's `--save-path` only applies to torrents passed positionally on the command line at startup), so it has to be set once here.
+
+### Verifying the tunnel and kill switch (do this before torrenting anything)
+```zsh
+sudo ip netns exec protonvpn curl -s ifconfig.me                     # should be a Proton exit IP, never lovefield's home IP
+sudo ip netns exec protonvpn ip link set pvpn0 down                  # simulate a dropped tunnel
+sudo ip netns exec protonvpn curl -s --max-time 5 ifconfig.me        # must hang/fail — no fallback to the real WAN
+sudo ip netns exec protonvpn ip link set pvpn0 up
+sudo systemctl restart protonvpn                                     # re-establish cleanly
+```
+In the qBittorrent WebUI, cross-check a torrent's reported peer-facing IP against the Proton exit IP from the first command above.
+
+### Sorting downloads into Jellyfin's library while still seeding
+`/mnt/storage/media/{downloads,movies,tv,...}` are all in the same `storage/media` ZFS dataset (see Storage section above), so moving a finished download into the library is an instant rename, not a copy — qBittorrent keeps seeding from the new location with no interruption.
+1. Options → Downloads → confirm Torrent Management Mode is **Automatic**.
+2. Categories panel → add a category per library folder, e.g. `movies` → `/mnt/storage/media/movies`, `tv` → `/mnt/storage/media/tv`.
+3. Assign a torrent's category (at add-time, or later via right-click → Category on an existing torrent) and qBittorrent relocates the files there automatically, then keeps seeding from the new path.
+4. Any new subfolder added under `/mnt/storage/media/` for this (or anything else) needs the same ownership as its siblings or qBittorrent/Jellyfin will get permission-denied writing/reading it — see Known Issues.
+
+### Common Commands
+```zsh
+sudo systemctl status protonvpn qbittorrent-nox qbittorrent-webui-proxy
+sudo ip netns exec protonvpn wg show                  # tunnel handshake/traffic stats
+sudo ip netns list
+```
+
 # Known Issues
 
 ## `*.audioboss.win` breaks in Firefox/Chrome but works in Safari
@@ -238,3 +289,21 @@ The `immich-machine-learning` container (smart search, face recognition, OCR) is
 If AdGuard's `dns.bind_hosts` is set to `0.0.0.0` (bind all interfaces), it claims port 53 on *every* interface — including the gateway IP of any podman bridge network (e.g. `10.89.0.1`). This silently breaks `aardvark-dns`, podman's container-name DNS resolution (what lets `immich-server` find `immich-postgres` by name), with errors like `failed to bind udp listener on 10.89.0.1:53: Address already in use`.
 
 Fixed by binding AdGuard to specific addresses instead of `0.0.0.0` (`services.adguardhome.settings.dns.bind_hosts` in `configuration.nix`). Worth remembering if a *future* podman/oci-container service mysteriously can't resolve its sibling containers by name — check `sudo journalctl -u podman-<name> | grep aardvark` for this exact symptom before assuming the container config is wrong.
+
+## `wireguard-netns` interface name collides with the WireGuard server's `wg0`
+**Symptom:** `protonvpn.service` (from `modules/services/wireguard-netns`) fails immediately with `RTNETLINK answers: File exists`.
+
+**Cause:** The bring-up script creates its WireGuard link in the *root* namespace first, then moves it into the target namespace (`ip link set <if> netns protonvpn`) — that's just how `ip link` works, an interface can't be created directly inside another namespace. If it's named `wg0`, that collides with the WireGuard remote-access server's own `wg0` interface, which already lives in the root namespace.
+
+**Fix:** `services.wireguard-netns.interfaceName` (default `pvpn0`) exists specifically to avoid this — any *other* future netns-confined service should pick its own distinct name too, not reuse `wg0` or `pvpn0`.
+
+## New subfolders under `/mnt/storage/media/` need explicit ownership
+**Symptom:** A service (qBittorrent, Jellyfin, Samba, ...) gets a permission-denied error writing to or reading a newly created folder under `/mnt/storage/media/`, even though sibling folders like `movies`/`tv`/`downloads` work fine.
+
+**Cause:** `chown -R root:media` + `chmod -R 2775` was applied once, at pool-creation time (see Storage section above). The setgid bit (`2`) makes *files and folders created inside an already-correct folder* inherit the `media` group, but a brand new top-level folder created directly under `/mnt/storage/media/` (e.g. `mkdir /mnt/storage/media/software`) doesn't retroactively get that treatment unless it was created *inside* a setgid folder — a bare `mkdir` at that level can land as `root:root` or whatever the creating user's default group is.
+
+**Fix:** whenever adding a new folder directly under `/mnt/storage/media/`:
+```zsh
+sudo chown root:media /mnt/storage/media/<new-folder>
+sudo chmod 2775 /mnt/storage/media/<new-folder>
+```
