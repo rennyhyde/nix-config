@@ -32,6 +32,17 @@ in
       default     = "1.1.1.1";
       description = "DNS server used for lookups made inside the namespace.";
     };
+
+    interfaceName = lib.mkOption {
+      type        = lib.types.str;
+      default     = "pvpn0";
+      description = ''
+        Name of the WireGuard link. It's created in the root namespace and then
+        moved into the target namespace, so this must not collide with any
+        interface name already used in the root namespace (e.g. "wg0" if a
+        wireguard-server is also running there).
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -65,19 +76,19 @@ in
         RemainAfterExit = true;
         ExecStart = pkgs.writers.writeBash "wireguard-netns-up-${cfg.namespace}" ''
           set -e
-          ${pkgs.iproute2}/bin/ip link add wg0 type wireguard
-          ${pkgs.iproute2}/bin/ip link set wg0 netns ${cfg.namespace}
-          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} address add ${cfg.address} dev wg0
+          ${pkgs.iproute2}/bin/ip link add ${cfg.interfaceName} type wireguard
+          ${pkgs.iproute2}/bin/ip link set ${cfg.interfaceName} netns ${cfg.namespace}
+          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} address add ${cfg.address} dev ${cfg.interfaceName}
           ${pkgs.iproute2}/bin/ip netns exec ${cfg.namespace} \
-            ${pkgs.wireguard-tools}/bin/wg setconf wg0 ${cfg.configFile}
-          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} link set wg0 up
+            ${pkgs.wireguard-tools}/bin/wg setconf ${cfg.interfaceName} ${cfg.configFile}
+          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} link set ${cfg.interfaceName} up
           ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} link set lo up
-          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} route add default dev wg0
+          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} route add default dev ${cfg.interfaceName}
         '';
         ExecStop = pkgs.writers.writeBash "wireguard-netns-down-${cfg.namespace}" ''
           set -e
-          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} route del default dev wg0 || true
-          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} link del wg0 || true
+          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} route del default dev ${cfg.interfaceName} || true
+          ${pkgs.iproute2}/bin/ip -n ${cfg.namespace} link del ${cfg.interfaceName} || true
         '';
       };
     };
