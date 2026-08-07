@@ -15,7 +15,7 @@
     git 
     curl 
     wget
-    immich-go
+    # immich-go
   ];
   
   programs.zsh.enable = true;

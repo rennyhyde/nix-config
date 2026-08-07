@@ -69,6 +69,7 @@
     ];
     brews = [
       "wireguard-tools"
+      "immich-go"
     ];
   };
 

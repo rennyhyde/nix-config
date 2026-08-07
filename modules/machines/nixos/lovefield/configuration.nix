@@ -45,6 +45,8 @@ in
     ../../../services/hello-world     # Caddy smoke test — remove once real services are up
     ../../../services/syncthing
     ../../../services/sundrop-cafe    # event site + RSVP CSV backend
+    ../../../services/wireguard-netns # isolated netns for the Proton VPN tunnel
+    ../../../services/qbittorrent-vpn # qBittorrent, confined to that netns
   ];
 
   networking.hostName = "lovefield";
@@ -130,6 +132,25 @@ in
       "mir-imac"
     ];
   };
+
+  # Proton VPN: isolated network namespace whose only route out is the Proton
+  # WireGuard tunnel. qBittorrent runs confined to this namespace (below) so its
+  # torrent traffic can never leak onto the home WAN, even if the tunnel drops.
+  #
+  # One-time manual setup (see readme.md for the full runbook):
+  #   1. Generate a WireGuard config for a P2P server from the Proton dashboard.
+  #   2. Save it, WITHOUT the [Interface] Address/DNS lines, to /etc/proton-vpn/qbittorrent.conf
+  #      (root:root, chmod 600) — this module wants a raw `wg setconf` config, not a wg-quick one.
+  #   3. Set `address` below to the Address from that same downloaded config (e.g. "10.2.0.2/32").
+  services.wireguard-netns = {
+    enable     = true;
+    namespace  = "protonvpn";
+    configFile = "/etc/proton-vpn/qbittorrent.conf";
+    address    = "10.2.0.2/32"; # placeholder — replace with the Address from Proton's config
+    dns        = "10.2.0.1";    # Proton's in-tunnel DNS; see readme.md if this differs per-server
+  };
+
+  services.qbittorrent-vpn.enable = true;
 
   services.hello-world.enable = true;
 
@@ -415,6 +436,7 @@ in
       { subdomain = "dns";        port = 3000; internalOnly = true;}
       { subdomain = "photos";     port = 2283; internalOnly = true;}  # Immich
       { subdomain = "music";      port = 4533; }   # Navidrome
+      { subdomain = "torrent";    port = 8080; internalOnly = true;}  # qBittorrent (VPN-confined)
       # { subdomain = "docs";    port = 28981; }  # Paperless
       { subdomain = "git";       port = 1134; }   # Forgejo
     ];
