@@ -21,7 +21,7 @@ in
 
     downloadDir = lib.mkOption {
       type        = lib.types.str;
-      default     = "/mnt/storage/media/downloads";
+      default     = "/mnt/storage/media/downloads/torrent";
       description = "Save path for torrents. Kept in the shared storage/media dataset so hardlink moves into the library work.";
     };
 
