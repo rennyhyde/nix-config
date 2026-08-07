@@ -192,6 +192,7 @@ in
     # DDNS updates since VPN clients resolve *.audioboss.win via AdGuard Home (local IP)
     # and WAN clients get 403 from Caddy regardless of what Cloudflare returns.
     "music.audioboss.win"
+    "media.audioboss.win"
     # photos.audioboss.win intentionally omitted — Immich is VPN-only (see caddy-server.expose),
     # resolved locally via AdGuard Home's *.audioboss.win rewrite; no public DNS needed.
     "git.audioboss.win"
