@@ -34,6 +34,38 @@ let
       ${pkgs.coreutils}/bin/sleep 5
     done
   '';
+
+  # Tiny JSON API for the ZFS pool's free space, queried by the Homepage
+  # dashboard's Storage tile (customapi widget). Needed because Homepage's
+  # built-in resources widget can't resolve a ZFS pool to a block device and
+  # always reports "Drive not found" for it (root's plain ext4 partition
+  # works fine via the resources widget already) — see the comment on
+  # services.homepage-dashboard below for the root disk fix and upstream bug.
+  storageStatusScript = pkgs.writeText "storage-status.py" ''
+    import http.server, json, subprocess
+
+    def zfs_bytes(dataset):
+        used, avail = subprocess.check_output(
+            ["${pkgs.zfs}/bin/zfs", "list", "-Hp", "-o", "used,available", dataset],
+            text=True,
+        ).split()
+        return int(used), int(avail)
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            used, avail = zfs_bytes("storage")
+            body = json.dumps({"used": used, "avail": avail}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    http.server.HTTPServer(("127.0.0.1", 8099), Handler).serve_forever()
+  '';
 in
 {
   imports = [
@@ -418,7 +450,10 @@ in
 
     widgets = [
       { resources = { label = "System"; cpu = true; memory = true; uptime = true; }; }
-      { resources = { label = "Storage"; expanded = true; disk = [ "/" "/mnt/storage" ]; }; }
+      # Root only — the resources widget can't resolve a ZFS pool to a block
+      # device (see storageStatusScript above); the "ZFS Storage" tile below
+      # covers /mnt/storage instead.
+      { resources = { label = "Storage"; expanded = true; disk = [ "/" ]; }; }
     ];
 
     services = [
@@ -434,6 +469,20 @@ in
           { "AdGuard Home" = { href = "https://dns.audioboss.win";     description = "DNS / ad blocking"; }; }
           { Forgejo        = { href = "https://git.audioboss.win";     description = "Git hosting"; }; }
           { qBittorrent    = { href = "https://torrent.audioboss.win"; description = "Torrent client (VPN-confined)"; }; }
+          {
+            "ZFS Storage" = {
+              href        = "#";
+              description = "RAIDZ1 pool free space";
+              widget = {
+                type = "customapi";
+                url  = "http://127.0.0.1:8099/";
+                mappings = [
+                  { field = "avail"; label = "Free"; format = "bytes"; }
+                  { field = "used";  label = "Used"; format = "bytes"; }
+                ];
+              };
+            };
+          }
         ];
       }
       {
@@ -453,6 +502,20 @@ in
   systemd.services.homepage-dashboard.serviceConfig = {
     PrivateDevices = lib.mkForce false;
     DevicePolicy   = lib.mkForce "auto";
+  };
+
+  # Backs the "ZFS Storage" tile on the Homepage dashboard — see
+  # storageStatusScript above. Loopback only; Homepage is the only consumer.
+  systemd.services.storage-status = {
+    description = "ZFS pool free-space API for the Homepage dashboard";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "zfs-import.target" "network.target" ];
+    serviceConfig = {
+      Type       = "simple";
+      ExecStart  = "${pkgs.python3}/bin/python3 ${storageStatusScript}";
+      Restart    = "always";
+      RestartSec = "5s";
+    };
   };
 
   services.caddy-server = {
