@@ -44,7 +44,6 @@ in
     ../../../services/caddy           # defines options.services.caddy-server
     ../../../services/hello-world     # Caddy smoke test — remove once real services are up
     ../../../services/syncthing
-    ../../../services/sundrop-cafe    # event site + RSVP CSV backend
     ../../../services/wireguard-netns # isolated netns for the Proton VPN tunnel
     ../../../services/qbittorrent-vpn # qBittorrent, confined to that netns
   ];
@@ -153,28 +152,6 @@ in
   services.qbittorrent-vpn.enable = true;
 
   services.hello-world.enable = true;
-
-  services.sundrop-cafe.enable = true;
-
-  # Public exposure via a dashboard-managed Cloudflare Tunnel — no router
-  # port-forwarding needed. The tunnel itself (public hostname -> this
-  # service) is configured entirely in the Cloudflare Zero Trust dashboard;
-  # this just runs the connector with the token it gives you.
-  # One-time manual setup: create the tunnel + public hostname in the
-  # dashboard, then put the connector token in /etc/cloudflared/sundrop-token.env
-  # as TUNNEL_TOKEN=... (chmod 600, not committed) before rebuilding.
-  systemd.services.cloudflared-sundrop = {
-    description = "Cloudflare Tunnel connector (sundrop, dashboard-managed)";
-    wantedBy    = [ "multi-user.target" ];
-    after       = [ "network.target" ];
-    serviceConfig = {
-      Type            = "simple";
-      EnvironmentFile = "/etc/cloudflared/sundrop-token.env";
-      ExecStart       = "${pkgs.cloudflared}/bin/cloudflared tunnel run";
-      Restart         = "always";
-      RestartSec      = "5s";
-    };
-  };
 
   services.syncthing-users = {
     enable    = true;
@@ -424,6 +401,50 @@ in
     };
   };
 
+  # Homepage dashboard — landing page at lovefield.audioboss.win with links to
+  # every service plus root/storage free space. VPN/LAN-only (see caddy expose
+  # below): it surfaces disk stats and every internal service link, so it's
+  # not something to leave reachable from the public internet.
+  services.homepage-dashboard = {
+    enable = true;
+    # Caddy rewrites the Host header to 127.0.0.1:<port> for every proxied
+    # service (see caddy-server module) — homepage's Next.js host check must
+    # match what it actually sees, not the public lovefield.audioboss.win name.
+    allowedHosts = "127.0.0.1:${toString config.services.homepage-dashboard.listenPort}";
+
+    settings = {
+      title = "lovefield";
+    };
+
+    widgets = [
+      { resources = { label = "System"; cpu = true; memory = true; uptime = true; }; }
+      { resources = { label = "Storage"; expanded = true; disk = [ "/" "/mnt/storage" ]; }; }
+    ];
+
+    services = [
+      {
+        Media = [
+          { Jellyfin  = { href = "https://media.audioboss.win";  description = "Movies & TV"; }; }
+          { Navidrome = { href = "https://music.audioboss.win";  description = "Music streaming"; }; }
+          { Immich    = { href = "https://photos.audioboss.win"; description = "Photo backup"; }; }
+        ];
+      }
+      {
+        Infrastructure = [
+          { "AdGuard Home" = { href = "https://dns.audioboss.win";     description = "DNS / ad blocking"; }; }
+          { Forgejo        = { href = "https://git.audioboss.win";     description = "Git hosting"; }; }
+          { qBittorrent    = { href = "https://torrent.audioboss.win"; description = "Torrent client (VPN-confined)"; }; }
+        ];
+      }
+      {
+        Files = [
+          { "Syncthing (galac)" = { href = "https://sync-galac.audioboss.win"; description = "File sync"; }; }
+          { "Syncthing (mir)"   = { href = "https://sync-mir.audioboss.win";   description = "File sync"; }; }
+        ];
+      }
+    ];
+  };
+
   services.caddy-server = {
     enable    = true;
     domain    = "audioboss.win";
@@ -440,6 +461,7 @@ in
       { subdomain = "torrent";    port = 8080; internalOnly = true;}  # qBittorrent (VPN-confined)
       # { subdomain = "docs";    port = 28981; }  # Paperless
       { subdomain = "git";       port = 1134; }   # Forgejo
+      { subdomain = "lovefield"; port = config.services.homepage-dashboard.listenPort; internalOnly = true; }  # Homepage dashboard
     ];
   };
 

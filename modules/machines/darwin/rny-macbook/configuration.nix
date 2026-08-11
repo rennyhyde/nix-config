@@ -70,6 +70,7 @@
     brews = [
       "wireguard-tools"
       "immich-go"
+      "ffmpeg"
     ];
   };
 

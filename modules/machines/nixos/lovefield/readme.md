@@ -88,7 +88,15 @@ The USB DAS uses a JMicron bridge that doesn't pass through each drive's real se
    sudo chown -R root:media /mnt/storage/media
    sudo chmod -R 2775 /mnt/storage/media   # setgid so new files/dirs inherit the `media` group
    ```
-   `storage/media` is a **shared** dataset, not per-service: Jellyfin, Samba, and any future download automation (Sonarr/Radarr/qBittorrent-style tools) all read/write the same `movies/`, `tv/`, `downloads/` tree. This matters because ZFS datasets are separate filesystems even within one pool — hardlinks (how those download tools do an instant, no-copy move from `downloads/` into the library) don't work *across* datasets, only within one. Keeping them all under `storage/media` is what makes that work. Once Jellyfin's/Samba's NixOS modules exist, add their service users to the `media` group instead of relying on `galac`/`mir` membership.
+   `storage/media` is a **shared** dataset, not per-service: Jellyfin, qBittorrent, and any future download automation all read/write the same `movies/`, `tv/`, `downloads/` tree. This matters because ZFS datasets are separate filesystems even within one pool — hardlinks (how those download tools do an instant, no-copy move from `downloads/` into the library) don't work *across* datasets, only within one. Keeping them all under `storage/media` is what makes that work. `galac`/`mir` are both in the `media` group (declared in `configuration.nix`) for shell-level access to this tree — though `chmod 2775` already makes it world-readable, so this mostly matters for write access.
+
+   Samba does **not** use this shared dataset — it has its own private, per-user directories instead (not group-shared):
+   ```
+   sudo mkdir -p /mnt/storage/samba/{galac,mir}
+   sudo chown galac:users /mnt/storage/samba/galac && sudo chmod 700 /mnt/storage/samba/galac
+   sudo chown mir:users   /mnt/storage/samba/mir   && sudo chmod 700 /mnt/storage/samba/mir
+   ```
+   (`galac`/`mir` are `isNormalUser` accounts with no personal group — primary group is the shared `users` group, not a same-named one — hence `chown <user>:users`, not `<user>:<user>`.) See the Samba section below for the share config itself.
 
    Paperless/Navidrome datasets stay root-owned until those services' NixOS modules exist and their real service-user UIDs are known. Immich's subpaths are chowned automatically by `systemd.tmpfiles.rules` — see the Immich section below. Add more datasets any time with `zfs create`.
 5. Point each user's Syncthing folders (via its web GUI, not Nix) at `/mnt/storage/syncthing/<user>/...`.
@@ -118,6 +126,8 @@ External port: 51820
 Internal IP: lovefield's static LAN IP
 Internal port: 51820
 ```
+
+**Also forward 80/tcp and 443/tcp** to the same internal IP — required for any Caddy-exposed service (Forgejo, Jellyfin, Navidrome, ...) that isn't `internalOnly` to be reachable from the WAN at all. This was missed on the initial setup (only 51820 was forwarded, since WireGuard was set up first); if a *new* router or reset ever wipes the port-forward table, both entries need to be re-added, not just WireGuard's. Symptom if 80/443 aren't forwarded: pages hang forever on "Performing a TLS handshake" from off-LAN/VPN networks, while working fine on LAN — see Known Issues for the full diagnostic flow.
 
 ### Provisioning a New Client
 1. Add the client name to `lovefield/configuration.nix`. No spaces.
@@ -193,8 +203,24 @@ Adguard Home serves two purposes: It blocks ads and trackers on the local networ
 
 **Important:** `mutableSettings = false` — AdGuard's config (`/var/lib/AdGuardHome/AdGuardHome.yaml`) is fully Nix-managed and gets overwritten on every `nixos-rebuild switch`. Any changes made through the AdGuard web UI (new rewrites, filter rules, DHCP settings, etc.) will be **silently reverted** on the next rebuild unless they're also added to `services.adguardhome.settings` in `configuration.nix`. Make changes in the Nix config, not the UI, if they need to persist.
 
+## Caddy (reverse proxy)
+Custom module (`services.caddy-server`, `modules/services/caddy/`) fronting every HTTP(S) service. Wildcard TLS cert (`audioboss.win` + `*.audioboss.win`) via Cloudflare DNS-01 challenge (`security.acme`, same Cloudflare API token used for DDNS) — no port 80/443 exposure needed just for cert renewal. Each entry in `services.caddy-server.expose` creates `<subdomain>.audioboss.win → localhost:<port>`.
+
+### `internalOnly` — restricting a route to LAN/VPN
+Set `internalOnly = true` on an expose entry to reject everything except lovefield's LAN (`10.0.0.0/24`) and VPN (`10.134.0.0/24`) subnets with a 403 — used for anything with sensitive access (Syncthing GUIs, AdGuard admin, Immich, qBittorrent WebUI). Anything *without* `internalOnly` is fully public once DNS resolves it — see the two gotchas below and in Known Issues.
+
+Two things that have to *both* be true for a public (non-`internalOnly`) subdomain to actually work from the WAN, neither of which fails loudly if missed:
+1. **The subdomain must be in `services.cloudflare-dyndns.domains`** — the `expose` list alone only tells Caddy to accept the vhost; it does *not* create the public DNS record. Forgetting this gives a silent `NXDOMAIN`/"server not found" on WAN (worked once for `media.audioboss.win` — see Known Issues).
+2. **Router must forward 80/tcp and 443/tcp to lovefield** — see the Wireguard section's port-forward note above.
+
+### Setup
+```
+sudo sh -c 'echo YOUR_CF_TOKEN > /etc/cloudflare/api-token && chmod 600 /etc/cloudflare/api-token'
+```
+(Same Cloudflare token used for DDNS — needs `Zone:DNS:Edit` + `Zone:Read`.)
+
 ## Immich
-Self-hosted photo backup, running as podman containers via `virtualisation.oci-containers` (upstream's official images — nixpkgs' `immich` package trails releases, so it isn't used). Reachable at `https://photos.audioboss.win` from the LAN or VPN (resolved locally by AdGuard's `*.audioboss.win` rewrite); not in the `cloudflare-dyndns` domain list, so it has no public DNS record and isn't reachable from the WAN.
+Self-hosted photo backup, running as podman containers via `virtualisation.oci-containers` (upstream's official images — nixpkgs' `immich` package trails releases, so it isn't used). Reachable at `https://photos.audioboss.win` from the LAN or VPN (Caddy's `internalOnly` on the `photos` expose entry rejects everything else); not in the `cloudflare-dyndns` domain list either, so it also has no public DNS record.
 
 ### First Time Setup
 The DB password is NOT included in the nix config (this repo is public). Runbook to set it up on a fresh machine:
@@ -220,6 +246,37 @@ The `immich-server`/`immich-postgres` image tags are pinned explicitly in `confi
 
 ### Machine Learning (intentionally not deployed)
 The `immich-machine-learning` container (smart search, face recognition, OCR) is not deployed — CPU-only inference isn't worth the thermal load on this hardware (see the fan-control hack above). `podman-immich-server` logs will show repeated `Machine learning request ... failed for all URLs` / `Machine learning server became unhealthy (http://immich-machine-learning:3003)` warnings — this is expected and harmless, Immich just falls back to not having those features. Can be added later (matching container shape as the other three) with zero data migration if the hardware situation changes.
+
+## Forgejo
+Self-hosted git forge (`services.forgejo`, built-in nixpkgs module — configured directly in `configuration.nix`, no custom wrapper). Bare-bones on purpose: sqlite3 database (no separate DB service), no mailer, no Forgejo Actions (CI) — just repos and Git LFS. Reachable at `https://git.audioboss.win` from anywhere (public, not `internalOnly` — see the Caddy section above for what that requires).
+
+- **Registration is closed** (`service.DISABLE_REGISTRATION = true`) since it's reachable from the open internet.
+- **Forgejo's own SSH server is disabled** (`server.DISABLE_SSH = true`) to avoid fighting the system OpenSSH on port 22 — clone over HTTPS: `https://git.audioboss.win/<user>/<repo>.git`.
+- The `forgejo` CLI binary (matching whatever version `services.forgejo.package` pins) is in `environment.systemPackages`, so it's directly on `$PATH` — no need to hunt the `/nix/store` path the systemd service uses.
+
+### First-time admin account
+```zsh
+sudo -u forgejo forgejo admin user create --username <name> --email <email> --password '<pw>' --admin
+```
+`admin` itself is a **reserved username** in Forgejo (collides with URL routes) and will be rejected — pick an actual name instead.
+
+## Samba
+LAN/VPN-only file shares (`services.samba`, built-in nixpkgs module), one private share per user — not group-shared like the storage runbook's `media` dataset. Not proxied through Caddy (SMB isn't HTTP; port 445 is opened directly in the firewall) and kept internal by binding only to `lo`/`enp3s0`/`wg0` (`bind interfaces only = yes`), on top of the router never forwarding 445. `nmbd` (legacy NetBIOS) and `winbindd` (AD/domain) are both disabled — SMB2+ only, which is all modern macOS/Windows need.
+
+Directory setup and share config are in the Storage section above and `configuration.nix` respectively.
+
+### First-time setup
+```zsh
+sudo smbpasswd -a galac   # Samba keeps its own password db, separate from the unix login password
+sudo smbpasswd -a mir
+```
+
+### Connecting (e.g. from a Mac)
+- Finder → **Go** → **Connect to Server...** (⌘K):
+  - LAN: `smb://10.0.0.5/galac` (or `/mir`)
+  - VPN: `smb://10.134.0.1/galac` (or `/mir`)
+  - Or any `*.audioboss.win` subdomain, e.g. `smb://nas.audioboss.win/galac` — works automatically via AdGuard's wildcard rewrite for LAN/VPN clients, no Nix config needed since it's a DNS-level rewrite, not a Caddy route. Does **not** work from WAN (445 isn't forwarded, by design).
+- Or look for `lovefield` under Finder's **Network** sidebar — published via Avahi/Bonjour (`services.avahi`, `_smb._tcp` service record).
 
 ## Proton VPN + qBittorrent
 qBittorrent runs confined to an isolated network namespace (`protonvpn`) whose only route out is a Proton VPN WireGuard tunnel — this is a real kill switch, not just "usually tunneled": the namespace has no other interface or route, so if the tunnel drops, qBittorrent's traffic simply stops rather than falling back to the home WAN. Two modules implement this:
@@ -296,6 +353,30 @@ Fixed by binding AdGuard to specific addresses instead of `0.0.0.0` (`services.a
 **Cause:** The bring-up script creates its WireGuard link in the *root* namespace first, then moves it into the target namespace (`ip link set <if> netns protonvpn`) — that's just how `ip link` works, an interface can't be created directly inside another namespace. If it's named `wg0`, that collides with the WireGuard remote-access server's own `wg0` interface, which already lives in the root namespace.
 
 **Fix:** `services.wireguard-netns.interfaceName` (default `pvpn0`) exists specifically to avoid this — any *other* future netns-confined service should pick its own distinct name too, not reuse `wg0` or `pvpn0`.
+
+## Caddy `internalOnly` silently let everyone through (or blocked everyone, VPN included)
+**Symptom:** An `internalOnly` service was reachable from the WAN despite the restriction, or — after trying to fix that — became unreachable even from the VPN/LAN it was supposed to allow.
+
+**Cause:** Caddyfile directives are **not** executed in the order they're written — Caddy sorts them into its own fixed global directive order first, then builds the request chain from that. The original implementation emitted a bare `handle @vpn { ... }` followed by a bare `respond ... 403` as siblings at the top level. That's exactly the case where Caddy's reordering can put `respond` ahead of `handle`, so the 403 fired unconditionally regardless of whether the IP matcher matched.
+
+**Fix:** wrap the whole thing in `route { }` (forces sequential evaluation of what's inside) and use Caddy's documented mutual-exclusion idiom of **two** `handle` blocks rather than `handle` + bare `respond`:
+```
+route {
+  @internal remote_ip <subnets>
+  handle @internal { <proxy> }
+  handle { respond "Internal network required" 403 }
+}
+```
+`modules/services/caddy/default.nix` now generates exactly this shape for any `internalOnly` entry. Worth remembering for any *other* future conditional Caddyfile logic added to that module — plain sibling directives without `route {}` are not safe to assume run in written order.
+
+## A public Caddy subdomain resolves everywhere except the WAN
+**Symptom:** `some-service.audioboss.win` works fine on LAN/VPN, but gives "server not found" (a DNS failure, not a Caddy 403 or a TLS error) when tested from an actual WAN network.
+
+**Cause:** `services.caddy-server.expose` controls what Caddy will *serve* — it has nothing to do with whether a public DNS record exists for that subdomain. That's a separate list, `services.cloudflare-dyndns.domains` in `configuration.nix`. A subdomain present in `expose` but missing from that list has no public A record at all, so WAN resolvers correctly return nothing. This already happened once with `media.audioboss.win`.
+
+**Fix:** every non-`internalOnly` expose entry needs a matching entry in `services.cloudflare-dyndns.domains`. `internalOnly` entries should generally be *omitted* from that list on purpose (see the comments already next to `sync-galac`/`sync-mir`/`photos` in `configuration.nix`) since they'd 403 from WAN anyway regardless of what DNS returns.
+
+**Diagnosing:** compare `dig <name> @1.1.1.1 +short` (or your current network's actual resolver, which may differ — e.g. a VPN app forcing its own DNS server) against a known-working subdomain. If a working subdomain resolves and the broken one doesn't, check the DDNS list before suspecting Caddy or the router. If your device is on a commercial VPN (Proton, Mullvad, etc.) with its own DNS resolver, that resolver's negative-response cache is separate from your OS/browser cache and won't clear with a local flush — query it directly (`dig <name> @<vpn-dns-ip> +short`) to confirm, and give it time (or toggle the VPN's own ad/tracker-blocking feature, if any) rather than assuming lovefield is misconfigured.
 
 ## New subfolders under `/mnt/storage/media/` need explicit ownership
 **Symptom:** A service (qBittorrent, Jellyfin, Samba, ...) gets a permission-denied error writing to or reading a newly created folder under `/mnt/storage/media/`, even though sibling folders like `movies`/`tv`/`downloads` work fine.
