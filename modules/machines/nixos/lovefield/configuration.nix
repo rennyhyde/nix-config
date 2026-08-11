@@ -445,6 +445,16 @@ in
     ];
   };
 
+  # The nixpkgs module's default hardening (PrivateDevices + DevicePolicy=closed)
+  # blocks the resources widget above from reading real disk devices, causing
+  # "Drive not found for target: ..." for every mount (root included — not a
+  # ZFS-specific issue): https://github.com/NixOS/nixpkgs/issues/500003
+  # Loosen just device access; everything else in the module's hardening stays.
+  systemd.services.homepage-dashboard.serviceConfig = {
+    PrivateDevices = lib.mkForce false;
+    DevicePolicy   = lib.mkForce "auto";
+  };
+
   services.caddy-server = {
     enable    = true;
     domain    = "audioboss.win";
