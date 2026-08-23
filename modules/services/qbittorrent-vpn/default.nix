@@ -1,7 +1,73 @@
 { config, pkgs, lib, ... }:
 let
-  cfg = config.services.qbittorrent-vpn;
-  ns  = config.services.wireguard-netns.namespace;
+  cfg   = config.services.qbittorrent-vpn;
+  ns    = config.services.wireguard-netns.namespace;
+  iface = config.services.wireguard-netns.interfaceName;
+
+  # Fails loudly (non-zero exit) the moment any check doesn't hold, rather than
+  # printing a wall of output you have to read carefully. Run as root (needs to
+  # read another user's /proc/<pid>/ns/net and `ip netns exec`).
+  leakCheckScript = pkgs.writeShellScriptBin "qbt-leak-check" ''
+    set -euo pipefail
+    NS="${ns}"
+    IFACE="${iface}"
+    TORRENT_PORT="${toString cfg.torrentingPort}"
+
+    if [ "$(id -u)" -ne 0 ]; then
+      echo "Run this as root: sudo qbt-leak-check" >&2
+      exit 1
+    fi
+
+    echo "== 1. Is qbittorrent-nox actually inside the '$NS' namespace? =="
+    PID=$(${pkgs.systemd}/bin/systemctl show -p MainPID --value qbittorrent-nox)
+    if [ -z "$PID" ] || [ "$PID" = "0" ]; then
+      echo "FAIL: qbittorrent-nox is not running"; exit 1
+    fi
+    PROC_NETNS=$(readlink "/proc/$PID/ns/net")
+    NS_NETNS=$(readlink "/var/run/netns/$NS")
+    if [ "$PROC_NETNS" != "$NS_NETNS" ]; then
+      echo "FAIL: qbittorrent-nox (pid $PID, netns $PROC_NETNS) is NOT in namespace $NS ($NS_NETNS)"
+      exit 1
+    fi
+    echo "OK: qbittorrent-nox (pid $PID) confirmed inside $NS"
+
+    echo
+    echo "== 2. Interfaces inside '$NS' — should ONLY be lo + $IFACE =="
+    ${pkgs.iproute2}/bin/ip -n "$NS" -brief link show
+    UNEXPECTED=$(${pkgs.iproute2}/bin/ip -n "$NS" -brief link show | awk '{print $1}' | grep -v -E '^(lo|'"$IFACE"')' || true)
+    if [ -n "$UNEXPECTED" ]; then
+      echo "FAIL: unexpected interface(s) in $NS: $UNEXPECTED"; exit 1
+    fi
+    echo "OK: no unexpected interfaces"
+
+    echo
+    echo "== 3. Routes inside '$NS' — should ONLY have a default via $IFACE =="
+    ${pkgs.iproute2}/bin/ip -n "$NS" route show
+
+    echo
+    echo "== 4. Public IP: tunnel namespace vs. host's real WAN (must differ) =="
+    NS_IP=$(${pkgs.iproute2}/bin/ip netns exec "$NS" ${pkgs.curl}/bin/curl -s --max-time 5 https://ifconfig.me || echo UNREACHABLE)
+    HOST_IP=$(${pkgs.curl}/bin/curl -s --max-time 5 https://ifconfig.me || echo UNREACHABLE)
+    echo "  protonvpn namespace: $NS_IP"
+    echo "  host (normal WAN):   $HOST_IP"
+    if [ "$NS_IP" = "UNREACHABLE" ]; then
+      echo "FAIL: namespace has no working internet — tunnel is down"; exit 1
+    fi
+    if [ "$NS_IP" = "$HOST_IP" ]; then
+      echo "FAIL: namespace IP matches host IP — traffic is NOT going through the tunnel"; exit 1
+    fi
+    echo "OK: namespace exits through a different IP than the host"
+
+    echo
+    echo "== 5. Torrenting port must NOT be reachable from the host namespace =="
+    if ${pkgs.iproute2}/bin/ss -tlnp 2>/dev/null | grep -q ":$TORRENT_PORT "; then
+      echo "FAIL: something is listening on port $TORRENT_PORT outside the namespace"; exit 1
+    fi
+    echo "OK: torrenting port not exposed on the host"
+
+    echo
+    echo "All checks passed — qBittorrent is confined to $NS, exiting via $IFACE only."
+  '';
 in
 {
   options.services.qbittorrent-vpn = {
@@ -111,6 +177,6 @@ in
       };
     };
 
-    environment.systemPackages = [ pkgs.qbittorrent-nox ];
+    environment.systemPackages = [ pkgs.qbittorrent-nox leakCheckScript ];
   };
 }

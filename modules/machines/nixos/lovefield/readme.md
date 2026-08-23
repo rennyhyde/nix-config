@@ -322,11 +322,19 @@ In the qBittorrent WebUI, cross-check a torrent's reported peer-facing IP agains
 3. Assign a torrent's category (at add-time, or later via right-click → Category on an existing torrent) and qBittorrent relocates the files there automatically, then keeps seeding from the new path.
 4. Any new subfolder added under `/mnt/storage/media/` for this (or anything else) needs the same ownership as its siblings or qBittorrent/Jellyfin will get permission-denied writing/reading it — see Known Issues.
 
+### Checking for leaks
+`qbt-leak-check` (installed system-wide by the `qbittorrent-vpn` module) automates the checks worth running periodically, not just once at setup — confirms qBittorrent's process is actually inside the `protonvpn` namespace, that the namespace has no interface besides the tunnel, that its public IP differs from the host's, and that the torrenting port isn't reachable outside the namespace. Fails loudly (non-zero exit, clear `FAIL:` line) the moment anything's wrong instead of requiring you to eyeball output:
+```zsh
+sudo qbt-leak-check
+```
+Worth running after any rebuild that touches these modules, after a tunnel reconnect, and occasionally just as a spot-check while torrenting.
+
 ### Common Commands
 ```zsh
 sudo systemctl status protonvpn qbittorrent-nox qbittorrent-webui-proxy
 sudo ip netns exec protonvpn wg show                  # tunnel handshake/traffic stats
 sudo ip netns list
+sudo qbt-leak-check                                    # full leak/kill-switch check, see above
 ```
 
 # Known Issues
@@ -377,6 +385,19 @@ route {
 **Fix:** every non-`internalOnly` expose entry needs a matching entry in `services.cloudflare-dyndns.domains`. `internalOnly` entries should generally be *omitted* from that list on purpose (see the comments already next to `sync-galac`/`sync-mir`/`photos` in `configuration.nix`) since they'd 403 from WAN anyway regardless of what DNS returns.
 
 **Diagnosing:** compare `dig <name> @1.1.1.1 +short` (or your current network's actual resolver, which may differ — e.g. a VPN app forcing its own DNS server) against a known-working subdomain. If a working subdomain resolves and the broken one doesn't, check the DDNS list before suspecting Caddy or the router. If your device is on a commercial VPN (Proton, Mullvad, etc.) with its own DNS resolver, that resolver's negative-response cache is separate from your OS/browser cache and won't clear with a local flush — query it directly (`dig <name> @<vpn-dns-ip> +short`) to confirm, and give it time (or toggle the VPN's own ad/tracker-blocking feature, if any) rather than assuming lovefield is misconfigured.
+
+## Full-tunnel WireGuard over cellular/hotspot: DNS and pings work, but pages hang and time out
+**Symptom:** Connected to the WireGuard tunnel over a phone hotspot with `AllowedIPs = 0.0.0.0/0` (full-tunnel). `dig`/`nslookup` for any domain — including ones with no relation to lovefield, like `anthropic.com` — resolve correctly and instantly. `ping` to the VPN gateway (`10.134.0.1`) and to public IPs succeeds. But browsers hang and eventually fail with `ERR_CONNECTION_TIMED_OUT` (Chrome) on most sites, while a couple of things (e.g. a Google search) mysteriously keep working. Looks like a DNS problem at first — it isn't.
+
+**Cause:** Path MTU blackhole. Small packets (DNS queries/responses, ICMP pings) get through fine regardless of MTU, so they falsely suggest the tunnel is healthy. But cellular/hotspot links plus the extra WireGuard encapsulation overhead often push the effective MTU below what either end assumes, and if the "packet too big, fragment" ICMP response is dropped anywhere along the path (very common on cellular carriers), TCP just hangs forever instead of resizing — which is exactly what a TLS ClientHello (typically 1300–1600+ bytes) runs into. Confirmed with a manual MTU probe from the client:
+```zsh
+ping -c 2 -D -s 1300 10.134.0.1   # succeeds
+ping -c 2 -D -s 1400 10.134.0.1   # 100% loss — the blackhole boundary is between these
+```
+
+**Fix:** cap the WireGuard interface MTU below the blackhole boundary. `modules/services/wireguard/default.nix` now sets `mtu = 1280` on the server's `wg0` (1280 is the IPv6-minimum MTU — always safe) and bakes `MTU = 1280` into every auto-generated `client.conf`. Existing clients get it patched in automatically by a migration step in the same activation script (mirrors the existing DNS-migration pattern) the next time `lovefield` is rebuilt — no manual client-side edit needed after that, though `wg-quick down`/`up` (or a reboot/reconnect) is required to pick up the new value.
+
+**Diagnosing tunnel issues like this in general:** don't trust `ping`/`dig` alone to rule out a routing/MTU problem — they only exercise small packets. Use `curl -v` to see exactly where a real request stalls (DNS resolved? TCP connected? hanging in the TLS handshake?), and bisect with `ping -D -s <size>` at decreasing sizes to find the actual blackhole boundary before assuming DNS or NAT is at fault.
 
 ## New subfolders under `/mnt/storage/media/` need explicit ownership
 **Symptom:** A service (qBittorrent, Jellyfin, Samba, ...) gets a permission-denied error writing to or reading a newly created folder under `/mnt/storage/media/`, even though sibling folders like `movies`/`tv`/`downloads` work fine.
