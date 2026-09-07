@@ -239,8 +239,14 @@ in
       # https://github.com/NixOS/nixpkgs/issues/379646#issuecomment-2638389264
       filtering = {
         rewrites = [
-          { domain = "audioboss.win"; answer = "10.0.0.5"; enabled = true;}
-          { domain = "*.audioboss.win"; answer = "10.0.0.5"; enabled = true;}
+          # Resolve to the WireGuard VPN IP (10.134.0.1) rather than the LAN IP
+          # (10.0.0.5) so VPN clients on networks that also use 10.0.0.x are not
+          # intercepted by their local LAN route instead of the WireGuard tunnel.
+          # LAN clients reach 10.134.0.1 via a static route on the home router
+          # (10.134.0.0/24 → 10.0.0.5); Linux's weak host model accepts the
+          # packets on enp3s0 even though 10.134.0.1 belongs to wg0.
+          { domain = "audioboss.win"; answer = "10.134.0.1"; enabled = true;}
+          { domain = "*.audioboss.win"; answer = "10.134.0.1"; enabled = true;}
         ];
       };
       # Firefox (and some Chrome configs) default to DNS-over-HTTPS, which bypasses
