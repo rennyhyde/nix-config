@@ -117,6 +117,18 @@ sudo zpool online storage <disk-by-id>    # resilvers back to healthy
 ## Wireguard
 Wireguard is the VPN protocol that allows users to access lovefield, the local network, and local-only services.
 
+### Router Static Route
+AdGuard resolves `*.audioboss.win` to `10.134.0.1` (lovefield's WireGuard IP) so VPN clients always route through the tunnel regardless of what subnet their current network uses. LAN clients also get this IP from DNS, so the router needs a static route to forward that traffic to lovefield:
+
+```
+Destination: 10.134.0.0
+Subnet mask: 255.255.255.0  (i.e. /24)
+Gateway:     10.0.0.5       (lovefield's LAN IP)
+Metric:      1              (default)
+```
+
+Without this, LAN clients that don't have a WireGuard connection will fail to resolve any `*.audioboss.win` service.
+
 ### Router Port Forward
 1. Login to your router's admin page
 2. Forward port 51820 to lovefield:

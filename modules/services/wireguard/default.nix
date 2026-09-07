@@ -59,6 +59,7 @@ let
             echo "PrivateKey = $PRIV"
             echo "Address = $CLIENT_IP/24"
             echo "DNS = ${cfg.vpnSubnet}.1"
+            echo "MTU = 1280"
             echo ""
             echo '[Peer]'
             echo "PublicKey = $SERVER_PUBKEY"
@@ -84,6 +85,15 @@ let
           ${pkgs.gnused}/bin/sed -i "s/^DNS = 1.1.1.1$/DNS = ${cfg.vpnSubnet}.1/" "$DIR/client.conf"
           ${pkgs.qrencode}/bin/qrencode -t ansiutf8 -o $DIR/qr.txt < $DIR/client.conf
           echo "wireguard: updated DNS for ${name} -> ${cfg.vpnSubnet}.1 (re-scan QR code)"
+        fi
+
+        # Migrate: cap MTU at 1280 — cellular/hotspot paths often blackhole
+        # packets above ~1300 bytes, hanging TLS handshakes while leaving
+        # small UDP like DNS/pings unaffected.
+        if [ -f $DIR/client.conf ] && ! grep -q "^MTU = " "$DIR/client.conf"; then
+          ${pkgs.gnused}/bin/sed -i "/^DNS = /a MTU = 1280" "$DIR/client.conf"
+          ${pkgs.qrencode}/bin/qrencode -t ansiutf8 -o $DIR/qr.txt < $DIR/client.conf
+          echo "wireguard: added MTU=1280 for ${name} (re-scan QR code)"
         fi
       )
     '') cfg.clients}
@@ -137,6 +147,11 @@ in
       address        = [ "${cfg.vpnSubnet}.1/24" ];
       listenPort     = cfg.listenPort;
       privateKeyFile = "/etc/wireguard/private.key";
+      # Cellular/hotspot paths often blackhole packets above ~1300 bytes (PMTUD
+      # ICMP gets dropped en route), which hangs TLS handshakes while leaving
+      # small UDP like DNS/pings unaffected. 1280 is the IPv6-minimum MTU and
+      # always survives.
+      mtu            = 1280;
 
       # Per-client peer blocks — changing the clients list changes this string,
       # which changes the systemd unit and triggers a service restart on rebuild.
