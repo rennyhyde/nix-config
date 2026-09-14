@@ -309,7 +309,12 @@ in
         "security"            = "user";
         "min protocol"        = "SMB2";
         "map to guest"        = "never";
-        "interfaces"          = "lo enp3s0 wg0";
+        # wg0 given as IP/CIDR rather than by name: it's a POINTOPOINT/NOARP
+        # pseudo-interface with no broadcast address, which Samba's by-name
+        # interface auto-detection silently fails to bind to (no error logged,
+        # it's just absent from `ss -tlnp`). Explicit IP/CIDR bypasses that
+        # detection and tells smbd exactly what to bind.
+        "interfaces"          = "lo enp3s0 10.134.0.1/24";
         "bind interfaces only" = true;
       };
       galac = {
