@@ -340,6 +340,17 @@ in
     };
   };
 
+  # smbd binds explicitly to "lo enp3s0 wg0" with "bind interfaces only" above, but
+  # NixOS doesn't order smbd's unit after wg-quick-wg0 by default. If wg0 doesn't
+  # exist yet when smbd starts (e.g. on boot), smbd silently skips binding to it —
+  # no crash, just no listener on the tunnel IP — and never retries later, breaking
+  # SMB access over WireGuard until smbd is restarted (confirmed via
+  # `ss -tlnp | grep :445` showing no 10.134.0.1:445 entry).
+  systemd.services.smbd = {
+    after = [ "wg-quick-wg0.service" ];
+    wants = [ "wg-quick-wg0.service" ];
+  };
+
   # mDNS/Bonjour so lovefield shows up under Finder > Network without typing an IP.
   services.avahi = {
     enable   = true;
