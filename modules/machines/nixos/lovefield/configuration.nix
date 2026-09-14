@@ -328,6 +328,15 @@ in
         "create mask"    = "0600";
         "directory mask" = "0700";
       };
+      media = {
+        path             = "/mnt/storage/media";
+        browseable       = "yes";
+        "read only"      = "no";
+        "valid users"    = "galac, mir";
+        "create mask"    = "0664";
+        "directory mask" = "2775";
+        "force group"    = "media";
+      };
     };
   };
 

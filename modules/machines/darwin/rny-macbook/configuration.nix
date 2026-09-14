@@ -62,6 +62,7 @@
       "obs"
       "balenaetcher"
       "syncthing-app"
+      "freecad"
 
       # Not on homebrew or nix:
       #
@@ -71,6 +72,7 @@
       "wireguard-tools"
       "immich-go"
       "ffmpeg"
+      "yt-dlp"
     ];
   };
 
