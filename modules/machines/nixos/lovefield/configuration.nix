@@ -78,6 +78,7 @@ in
     ../../../services/syncthing
     ../../../services/wireguard-netns # isolated netns for the Proton VPN tunnel
     ../../../services/qbittorrent-vpn # qBittorrent, confined to that netns
+    ../../../services/projectsend     # large-file sharing for external partners
   ];
 
   networking.hostName = "lovefield";
@@ -207,6 +208,7 @@ in
     "git.audioboss.win"
     "paper.audioboss.win"
     "lovefield.audioboss.win"
+    "share.audioboss.win"
   ];
 
   # AdGuard Home — network-wide DNS resolver with ad blocking.
@@ -464,6 +466,28 @@ in
     };
   };
 
+  # ProjectSend (self-hosted large-file sharing for external partners).
+  # Reachable at https://share.audioboss.win — deliberately public (not
+  # internalOnly): the whole point is that people outside the VPN/LAN get a
+  # download link by email, with an expiry date and a message attached.
+  # Secrets (DB/mail passwords, first admin account) live at
+  # /etc/projectsend/secrets.env, NOT in this repo — see the runbook comment
+  # at the top of modules/services/projectsend/default.nix.
+  services.projectsend = {
+    enable  = true;
+    appUrl  = "https://share.audioboss.win";
+    dataDir = "/mnt/storage/projectsend";
+    # SMTP is required for the "share by email" workflow (recipients get
+    # their download link by mail) — pick a real provider/relay and fill
+    # this in, plus MAIL_USERNAME/MAIL_PASSWORD in secrets.env, before
+    # relying on it. Proton Mail needs its paid Bridge app for SMTP, so it
+    # won't work here as-is.
+    # mail = {
+    #   host        = "smtp.example.com";
+    #   fromAddress = "share@audioboss.win";
+    # };
+  };
+
   # Homepage dashboard — landing page at lovefield.audioboss.win with links to
   # every service plus root/storage free space. VPN/LAN-only (see caddy expose
   # below): it surfaces disk stats and every internal service link, so it's
@@ -520,6 +544,7 @@ in
         Files = [
           { "Syncthing (galac)" = { href = "https://sync-galac.audioboss.win"; description = "File sync"; }; }
           { "Syncthing (mir)"   = { href = "https://sync-mir.audioboss.win";   description = "File sync"; }; }
+          { ProjectSend         = { href = "https://share.audioboss.win";     description = "Share files with partners"; }; }
         ];
       }
     ];
@@ -566,6 +591,7 @@ in
       # { subdomain = "docs";    port = 28981; }  # Paperless
       { subdomain = "git";       port = 1134; }   # Forgejo
       { subdomain = "lovefield"; port = config.services.homepage-dashboard.listenPort; internalOnly = true; }  # Homepage dashboard
+      { subdomain = "share";     port = config.services.projectsend.port; }  # ProjectSend (public — see services.projectsend above)
     ];
   };
 

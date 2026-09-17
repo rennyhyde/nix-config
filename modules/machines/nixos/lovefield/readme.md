@@ -78,6 +78,7 @@ The USB DAS uses a JMicron bridge that doesn't pass through each drive's real se
    sudo zfs create -o mountpoint=/mnt/storage/media           storage/media
    sudo zfs create -o mountpoint=/mnt/storage/paperless       storage/paperless
    sudo zfs create -o mountpoint=/mnt/storage/navidrome       storage/navidrome
+   sudo zfs create -o mountpoint=/mnt/storage/projectsend     storage/projectsend
    sudo chown galac:users /mnt/storage/syncthing/galac
    sudo chown mir:users   /mnt/storage/syncthing/mir
 
@@ -271,6 +272,43 @@ Self-hosted git forge (`services.forgejo`, built-in nixpkgs module — configure
 sudo -u forgejo forgejo admin user create --username <name> --email <email> --password '<pw>' --admin
 ```
 `admin` itself is a **reserved username** in Forgejo (collides with URL routes) and will be rejected — pick an actual name instead.
+
+## ProjectSend
+Self-hosted large-file sharing for external partners (`services.projectsend`, custom module — `modules/services/projectsend/`), running as three podman containers via `virtualisation.oci-containers` (upstream's official image, same reasoning as Immich: nixpkgs doesn't package it). Workflow it's meant for: log in, create a folder, upload files, share the folder with a handful of email addresses, set a download expiry, attach a message.
+
+Reachable at `https://share.audioboss.win` from **anywhere** — deliberately public, not `internalOnly`, since the recipients are outside partners with no VPN access. It's in both `services.caddy-server.expose` and `services.cloudflare-dyndns.domains` (see the Caddy section above for why both are required for a public subdomain to actually work from the WAN).
+
+### First Time Setup
+Secrets are NOT included in the nix config (this repo is public). Runbook to set them up on a fresh machine:
+
+1. On your Mac, create a local file (not in this repo) containing:
+   ```
+   DB_PASSWORD=<random password, letters/numbers only>
+   MYSQL_PASSWORD=<same value as DB_PASSWORD>
+   MYSQL_ROOT_PASSWORD=<a different random password>
+   ADMIN_EMAIL=<first admin account email>
+   ADMIN_PASSWORD=<first admin account password>
+   ```
+   `DB_PASSWORD` and `MYSQL_PASSWORD` must be identical — they're the same credential read by two different containers (the app container and the MySQL container) under the names their respective images expect.
+2. Copy it to lovefield and lock it down (same pattern as Immich's `db.env` — GNU rsync's `--chmod` needed for the bare-octal form, `-t` on ssh forces a TTY for the sudo prompt):
+   ```zsh
+   rsync -av --chmod=Fu=rw,Fgo= ./projectsend-secrets.env galac@10.0.0.5:/tmp/projectsend-secrets.env
+   ssh -t galac@10.0.0.5 'sudo mkdir -p /etc/projectsend && sudo install -o root -g root -m 600 /tmp/projectsend-secrets.env /etc/projectsend/secrets.env && rm /tmp/projectsend-secrets.env'
+   ```
+3. Rebuild. `systemctl status podman-projectsend-db podman-projectsend-redis podman-projectsend-app` should all show `active (running)`. Without `/etc/projectsend/secrets.env` in place, the containers fail to start with a clear "no such file" error.
+4. Visit `https://share.audioboss.win` and log in with `ADMIN_EMAIL`/`ADMIN_PASSWORD` from step 1.
+
+### Email (required for the "share with these email addresses" workflow)
+`services.projectsend.mail` is left unset in `configuration.nix` on purpose — Proton Mail (this domain's mail provider) doesn't do plain SMTP without its paid Bridge desktop app, so it can't be used directly from a headless server. Pick a real SMTP provider or relay, then:
+1. Add `MAIL_USERNAME`/`MAIL_PASSWORD` to `/etc/projectsend/secrets.env` (step 1 above).
+2. Set `services.projectsend.mail.host`/`fromAddress` in `configuration.nix` and rebuild.
+Until this is done, folders can still be shared and downloaded via direct link, but recipients won't get an email — that link has to be sent some other way.
+
+### Storage
+Uploaded files live at `/mnt/storage/projectsend/storage`; MySQL data at `/mnt/storage/projectsend/mysql`. Both are created automatically via `systemd.tmpfiles.rules` inside the module, but the ZFS dataset itself (`storage/projectsend`) is manual — see the Storage section's per-service dataset list above.
+
+### Upgrading
+The `appImageTag`/`mysqlImageTag`/`redisImageTag` options are pinned explicitly (not `:latest`) for controlled upgrades. Check ProjectSend's `UPDATE.md` before bumping `appImageTag` — v2 is a from-scratch rewrite (Laravel-based) of the older PHP app, so major version jumps may need a real migration path, not just a tag bump.
 
 ## Samba
 LAN/VPN-only file shares (`services.samba`, built-in nixpkgs module), one private share per user — not group-shared like the storage runbook's `media` dataset. Not proxied through Caddy (SMB isn't HTTP; port 445 is opened directly in the firewall) and kept internal by binding only to `lo`/`enp3s0`/`wg0` (`bind interfaces only = yes`), on top of the router never forwarding 445. `nmbd` (legacy NetBIOS) and `winbindd` (AD/domain) are both disabled — SMB2+ only, which is all modern macOS/Windows need.
