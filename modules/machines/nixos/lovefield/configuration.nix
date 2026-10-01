@@ -271,6 +271,12 @@ in
   services.jellyfin.enable = true;
   services.jellyfin.openFirewall = true;  # opens 8096 (HTTP) and 8920 (HTTPS)
 
+  # jellyfin needs media group to read /mnt/storage/media files.
+  # PrivateUsers=true in the upstream module creates a user namespace that remaps
+  # supplementary groups to nobody, so disable it to let the group membership work.
+  users.users.jellyfin.extraGroups = [ "media" ];
+  systemd.services.jellyfin.serviceConfig.PrivateUsers = lib.mkForce false;
+
   services.navidrome = {
     enable = true;
     openFirewall = true;  # Port 4533
