@@ -106,6 +106,8 @@ in {
         environmentFile   = "/etc/cloudflare/acme-env";
         group             = config.services.caddy.group;
         reloadServices    = [ "caddy.service" ];
+        # Local resolver doesn't return SOA for external zones; force lego to use 8.8.8.8.
+        extraLegoFlags    = [ "--dns.resolvers" "8.8.8.8:53" ];
       };
     };
 

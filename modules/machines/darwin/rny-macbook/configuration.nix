@@ -73,6 +73,8 @@
       "immich-go"
       "ffmpeg"
       "yt-dlp"
+      "git-lfs"
+      "btop"
     ];
   };
 
