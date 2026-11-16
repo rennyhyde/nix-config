@@ -332,14 +332,19 @@ Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deploy
 `cd /srv/pcktnz-web && ./deploy/lovefield.sh` — pull, `git lfs pull`, release build, restart. `--no-pull` rebuilds local edits.
 
 ### Auto-deploy (Forgejo Actions)
-The site repo's `.forgejo/workflows/deploy.yml` runs `deploy/lovefield.sh` on every push to `main`, on a runner labelled `lovefield`. The runner (`forgejo-runner-lovefield` in `configuration.nix`) runs as `galac` in host mode and is skipped until registered once:
+The site repo's `.forgejo/workflows/deploy.yml` runs `deploy/lovefield.sh` on every push to `main`, on a runner labelled `lovefield`. The runner (`forgejo-runner-lovefield` in `configuration.nix`) runs as `galac` in host mode and is skipped until its connection is configured once:
 ```
-# token: Forgejo UI > repo/user Settings > Actions > Runners > Create new runner
-cd /var/lib/forgejo-runner && sudo -u galac forgejo-runner register --no-interactive \
-  --instance https://git.audioboss.win --token <token> --name lovefield --labels lovefield:host
+# UI: repo/user Settings > Actions > Runners > Create new runner -> copy UUID + token
+install -m 600 /dev/null /var/lib/forgejo-runner/config.yaml   # as galac
+$EDITOR /var/lib/forgejo-runner/config.yaml
+#   runner:
+#     labels: ["lovefield:host"]
+#   server:
+#     connections:
+#       default: { url: "https://git.audioboss.win/", uuid: "<uuid>", token: "<token>" }
 sudo systemctl restart forgejo-runner-lovefield
 ```
-`galac` has passwordless sudo for exactly `systemctl restart pcktnz-web`. Logs: `journalctl -u forgejo-runner-lovefield -f`.
+(`forgejo-runner register` is deprecated and rejects the UI's token on Forgejo 15.) `galac` has passwordless sudo for exactly `systemctl restart pcktnz-web`. Logs: `journalctl -u forgejo-runner-lovefield -f`.
 
 ### Gotchas
 - `wasm-bindgen-cli` in the repo's `flake.nix` must match `wasm-bindgen` in `Cargo.lock` exactly. If a `cargo update` bumps it and the build fails with a schema/version mismatch, change the `wasm-bindgen-cli_0_2_NNN` attribute in `flake.nix` (nixpkgs ships one package per version).

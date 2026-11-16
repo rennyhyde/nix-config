@@ -415,7 +415,7 @@ in
     "d /mnt/storage/immich/upload 0755 root root -"
     "d /mnt/storage/immich/postgres 0700 999 999 -"  # immich-app/postgres image runs as uid 999
     # forgejo-runner state dir: made here, not via StateDirectory, because the
-    # unit is skipped until .runner exists so StateDirectory would never run.
+    # unit is skipped until config.yaml exists so StateDirectory would never run.
     "d /var/lib/forgejo-runner 0750 galac users -"
   ];
 
@@ -492,20 +492,28 @@ in
   #
   # Runs as galac (owner of /srv/pcktnz-web), so any workflow on a repo this
   # runner is registered to executes as galac — register it only for repos you
-  # trust. One-time registration (state lives in /var/lib/forgejo-runner):
+  # trust. `forgejo-runner register` is deprecated; the connection (UUID +
+  # token) is declared in /var/lib/forgejo-runner/config.yaml instead. That
+  # file holds a secret so it stays out of the repo / Nix store. One-time:
   #   1. Forgejo web UI > repo (or user) Settings > Actions > Runners >
-  #      Create new runner, copy the registration token.
-  #   2. cd /var/lib/forgejo-runner && sudo -u galac forgejo-runner register \
-  #        --no-interactive --instance https://git.audioboss.win \
-  #        --token <token> --name lovefield --labels lovefield:host
+  #      Create new runner; copy the UUID and token it shows.
+  #   2. As galac, create /var/lib/forgejo-runner/config.yaml (chmod 600):
+  #        runner:
+  #          labels: ["lovefield:host"]
+  #        server:
+  #          connections:
+  #            default:
+  #              url: https://git.audioboss.win/
+  #              uuid: <uuid>
+  #              token: <token>
   #   3. sudo systemctl restart forgejo-runner-lovefield
   systemd.services.forgejo-runner-lovefield = {
     description = "Forgejo Actions runner (host mode)";
     wantedBy    = [ "multi-user.target" ];
     wants       = [ "network-online.target" ];
     after       = [ "network-online.target" "forgejo.service" ];
-    # Skipped (not failed) until `forgejo-runner register` has been run.
-    unitConfig.ConditionPathExists = "/var/lib/forgejo-runner/.runner";
+    # Skipped (not failed) until config.yaml has been created (see above).
+    unitConfig.ConditionPathExists = "/var/lib/forgejo-runner/config.yaml";
     # What deploy/lovefield.sh needs: git, git-lfs, nix, plus the basics.
     # systemctl and sudo come from the system profile / setuid wrappers.
     path = with pkgs; [
@@ -517,7 +525,7 @@ in
       User             = "galac";
       Group            = "users";
       WorkingDirectory = "/var/lib/forgejo-runner";
-      ExecStart        = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon";
+      ExecStart        = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon --config /var/lib/forgejo-runner/config.yaml";
       Restart          = "on-failure";
       RestartSec       = 10;
     };
