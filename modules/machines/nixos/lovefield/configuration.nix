@@ -414,6 +414,9 @@ in
   systemd.tmpfiles.rules = [
     "d /mnt/storage/immich/upload 0755 root root -"
     "d /mnt/storage/immich/postgres 0700 999 999 -"  # immich-app/postgres image runs as uid 999
+    # forgejo-runner state dir: made here, not via StateDirectory, because the
+    # unit is skipped until .runner exists so StateDirectory would never run.
+    "d /var/lib/forgejo-runner 0750 galac users -"
   ];
 
   virtualisation.oci-containers.containers = {
@@ -513,7 +516,6 @@ in
     serviceConfig = {
       User             = "galac";
       Group            = "users";
-      StateDirectory   = "forgejo-runner";
       WorkingDirectory = "/var/lib/forgejo-runner";
       ExecStart        = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon";
       Restart          = "on-failure";
