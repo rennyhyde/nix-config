@@ -457,7 +457,8 @@ in
   };
 
   # Forgejo (self-hosted git forge), bare-bones: sqlite3 db, no mailer,
-  # no Actions (CI) — just repos + LFS. Registration is closed since this
+  # CI only via the host-mode runner below (forgejo-runner-lovefield) — just
+  # repos + LFS otherwise. Registration is closed since this
   # is reachable from the open internet; create accounts manually with
   #   sudo -u forgejo forgejo admin user create --username <name> --email <email> --password '<pw>' --admin
   # (drop --admin for non-admin accounts). Forgejo's own SSH server is
@@ -476,8 +477,58 @@ in
       };
       service.DISABLE_REGISTRATION = true;
       mailer.ENABLED = false;
+      actions.ENABLED = true;
     };
   };
+
+  # Forgejo Actions runner, host mode (jobs run directly on lovefield, no
+  # Docker). Used by pcktnz-web's .forgejo/workflows/deploy.yml, which runs
+  # /srv/pcktnz-web/deploy/lovefield.sh. Written by hand rather than via
+  # services.forgejo-runner because that module forces a DynamicUser, which
+  # can't write the galac-owned checkout or use sudo.
+  #
+  # Runs as galac (owner of /srv/pcktnz-web), so any workflow on a repo this
+  # runner is registered to executes as galac — register it only for repos you
+  # trust. One-time registration (state lives in /var/lib/forgejo-runner):
+  #   1. Forgejo web UI > repo (or user) Settings > Actions > Runners >
+  #      Create new runner, copy the registration token.
+  #   2. cd /var/lib/forgejo-runner && sudo -u galac forgejo-runner register \
+  #        --no-interactive --instance https://git.audioboss.win \
+  #        --token <token> --name lovefield --labels lovefield:host
+  #   3. sudo systemctl restart forgejo-runner-lovefield
+  systemd.services.forgejo-runner-lovefield = {
+    description = "Forgejo Actions runner (host mode)";
+    wantedBy    = [ "multi-user.target" ];
+    wants       = [ "network-online.target" ];
+    after       = [ "network-online.target" "forgejo.service" ];
+    # Skipped (not failed) until `forgejo-runner register` has been run.
+    unitConfig.ConditionPathExists = "/var/lib/forgejo-runner/.runner";
+    # What deploy/lovefield.sh needs: git, git-lfs, nix, plus the basics.
+    # systemctl and sudo come from the system profile / setuid wrappers.
+    path = with pkgs; [
+      bash coreutils gnused gawk curl nodejs gitMinimal git-lfs config.nix.package
+      "/run/current-system/sw" "/run/wrappers"
+    ];
+    environment.HOME = "/var/lib/forgejo-runner";
+    serviceConfig = {
+      User             = "galac";
+      Group            = "users";
+      StateDirectory   = "forgejo-runner";
+      WorkingDirectory = "/var/lib/forgejo-runner";
+      ExecStart        = "${pkgs.forgejo-runner}/bin/forgejo-runner daemon";
+      Restart          = "on-failure";
+      RestartSec       = 10;
+    };
+  };
+
+  # Lets the runner's deploy job restart the site without a password.
+  security.sudo.extraRules = [{
+    users    = [ "galac" ];
+    commands = [{
+      command  = "/run/current-system/sw/bin/systemctl restart pcktnz-web";
+      options  = [ "NOPASSWD" ];
+    }];
+  }];
 
   # ProjectSend (self-hosted large-file sharing for external partners).
   # Reachable at https://share.audioboss.win — deliberately public (not

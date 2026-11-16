@@ -261,7 +261,7 @@ The `immich-server`/`immich-postgres` image tags are pinned explicitly in `confi
 The `immich-machine-learning` container (smart search, face recognition, OCR) is not deployed — CPU-only inference isn't worth the thermal load on this hardware (see the fan-control hack above). `podman-immich-server` logs will show repeated `Machine learning request ... failed for all URLs` / `Machine learning server became unhealthy (http://immich-machine-learning:3003)` warnings — this is expected and harmless, Immich just falls back to not having those features. Can be added later (matching container shape as the other three) with zero data migration if the hardware situation changes.
 
 ## Forgejo
-Self-hosted git forge (`services.forgejo`, built-in nixpkgs module — configured directly in `configuration.nix`, no custom wrapper). Bare-bones on purpose: sqlite3 database (no separate DB service), no mailer, no Forgejo Actions (CI) — just repos and Git LFS. Reachable at `https://git.audioboss.win` from anywhere (public, not `internalOnly` — see the Caddy section above for what that requires).
+Self-hosted git forge (`services.forgejo`, built-in nixpkgs module — configured directly in `configuration.nix`, no custom wrapper). Bare-bones on purpose: sqlite3 database (no separate DB service), no mailer, Actions enabled with a single host-mode runner (`forgejo-runner-lovefield`, see pcktnz-web below) — otherwise just repos and Git LFS. Reachable at `https://git.audioboss.win` from anywhere (public, not `internalOnly` — see the Caddy section above for what that requires).
 
 - **Registration is closed** (`service.DISABLE_REGISTRATION = true`) since it's reachable from the open internet.
 - **Forgejo's own SSH server is disabled** (`server.DISABLE_SSH = true`) to avoid fighting the system OpenSSH on port 22 — clone over HTTPS: `https://git.audioboss.win/<user>/<repo>.git`.
@@ -330,6 +330,16 @@ Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deploy
 
 ### Updating
 `cd /srv/pcktnz-web && ./deploy/lovefield.sh` — pull, `git lfs pull`, release build, restart. `--no-pull` rebuilds local edits.
+
+### Auto-deploy (Forgejo Actions)
+The site repo's `.forgejo/workflows/deploy.yml` runs `deploy/lovefield.sh` on every push to `main`, on a runner labelled `lovefield`. The runner (`forgejo-runner-lovefield` in `configuration.nix`) runs as `galac` in host mode and is skipped until registered once:
+```
+# token: Forgejo UI > repo/user Settings > Actions > Runners > Create new runner
+cd /var/lib/forgejo-runner && sudo -u galac forgejo-runner register --no-interactive \
+  --instance https://git.audioboss.win --token <token> --name lovefield --labels lovefield:host
+sudo systemctl restart forgejo-runner-lovefield
+```
+`galac` has passwordless sudo for exactly `systemctl restart pcktnz-web`. Logs: `journalctl -u forgejo-runner-lovefield -f`.
 
 ### Gotchas
 - `wasm-bindgen-cli` in the repo's `flake.nix` must match `wasm-bindgen` in `Cargo.lock` exactly. If a `cargo update` bumps it and the build fails with a schema/version mismatch, change the `wasm-bindgen-cli_0_2_NNN` attribute in `flake.nix` (nixpkgs ships one package per version).
