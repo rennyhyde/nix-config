@@ -310,6 +310,33 @@ Uploaded files live at `/mnt/storage/projectsend/storage`; MySQL data at `/mnt/s
 ### Upgrading
 The `appImageTag`/`mysqlImageTag`/`redisImageTag` options are pinned explicitly (not `:latest`) for controlled upgrades. Check ProjectSend's `UPDATE.md` before bumping `appImageTag` — v2 is a from-scratch rewrite (Laravel-based) of the older PHP app, so major version jumps may need a real migration path, not just a tag bump.
 
+## pcktnz-web (dev site)
+Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deployment**: `services.pcktnz-web` (`modules/services/pcktnz-web/`) only runs a binary that is built by hand from a git checkout in `/srv/pcktnz-web`, and Caddy serves it at `https://pcktnz.audioboss.win`. It is `internalOnly` and deliberately absent from `cloudflare-dyndns.domains`, so only LAN/VPN clients can resolve and reach it (same pattern as Immich). Listens on `127.0.0.1:3100` (3000 is AdGuard's web UI). Runs as a `DynamicUser`; SQLite db and the resized-image cache live in `/var/lib/pcktnz-web/`, the checkout is read-only to the service.
+
+### First Time Setup
+1. Rebuild lovefield (`rebuild`). This creates `/srv/pcktnz-web` (owned by galac) and the unit, which stays inactive until a binary exists — no failure in the meantime.
+2. Clone and fetch the media (570 MB of Git LFS; clone over HTTPS, Forgejo's SSH is disabled):
+   ```sh
+   git clone https://git.audioboss.win/galac/pcktnz-web /srv/pcktnz-web
+   cd /srv/pcktnz-web && git lfs install --local && git lfs pull
+   ```
+   Alternative if LFS over Forgejo is slow: `rsync -av content/ galac@10.0.0.5:/srv/pcktnz-web/content/` from the Mac.
+3. Build (the repo's `flake.nix` supplies rustc + wasm target, cargo-leptos, dart-sass, wasm-bindgen-cli, binaryen — the downloaded copies cargo-leptos normally fetches don't run on NixOS). First build takes a while on this CPU:
+   ```sh
+   cd /srv/pcktnz-web && nix develop -c cargo leptos build --release
+   sudo systemctl restart pcktnz-web
+   ```
+4. Visit `https://pcktnz.audioboss.win` from the LAN or over WireGuard. `journalctl -u pcktnz-web -f` for logs (any `SendWrapper`/panic line is an SSR bug, see the site's CLAUDE.md).
+
+### Updating
+`cd /srv/pcktnz-web && ./deploy/lovefield.sh` — pull, `git lfs pull`, release build, restart. `--no-pull` rebuilds local edits.
+
+### Gotchas
+- `wasm-bindgen-cli` in the repo's `flake.nix` must match `wasm-bindgen` in `Cargo.lock` exactly. If a `cargo update` bumps it and the build fails with a schema/version mismatch, change the `wasm-bindgen-cli_0_2_NNN` attribute in `flake.nix` (nixpkgs ships one package per version).
+- The COURSEWORK installation only works if `content/coursework` was pulled (LFS) — otherwise it shows an empty manifest.
+- The chat WebSocket goes through Caddy as `wss://pcktnz.audioboss.win/ws`; no extra Caddy config needed.
+- `SITE_URL` in the site's `server/src/rss.rs` is still a placeholder, so RSS links won't point at this hostname.
+
 ## Samba
 LAN/VPN-only file shares (`services.samba`, built-in nixpkgs module), one private share per user — not group-shared like the storage runbook's `media` dataset. Not proxied through Caddy (SMB isn't HTTP; port 445 is opened directly in the firewall) and kept internal by binding only to `lo`/`enp3s0`/`wg0` (`bind interfaces only = yes`), on top of the router never forwarding 445. `nmbd` (legacy NetBIOS) and `winbindd` (AD/domain) are both disabled — SMB2+ only, which is all modern macOS/Windows need.
 

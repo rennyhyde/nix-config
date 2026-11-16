@@ -79,6 +79,7 @@ in
     ../../../services/wireguard-netns # isolated netns for the Proton VPN tunnel
     ../../../services/qbittorrent-vpn # qBittorrent, confined to that netns
     ../../../services/projectsend     # large-file sharing for external partners
+    ../../../services/pcktnz-web      # personal site, dev deployment (VPN/LAN-only)
   ];
 
   networking.hostName = "lovefield";
@@ -185,6 +186,12 @@ in
   services.qbittorrent-vpn.enable = true;
 
   services.hello-world.enable = true;
+
+  # pcktnz-web dev server: built by hand from /srv/pcktnz-web (see the module
+  # header and readme.md). Served at pcktnz.audioboss.win, internalOnly, and
+  # deliberately NOT in cloudflare-dyndns.domains — LAN/VPN clients resolve it
+  # through AdGuard's *.audioboss.win rewrite, WAN clients never see it.
+  services.pcktnz-web.enable = true;
 
   services.syncthing-users = {
     enable    = true;
@@ -553,6 +560,11 @@ in
           { ProjectSend         = { href = "https://share.audioboss.win";     description = "Share files with partners"; }; }
         ];
       }
+      {
+        Dev = [
+          { "pcktnz-web" = { href = "https://pcktnz.audioboss.win"; description = "Personal site (dev)"; }; }
+        ];
+      }
     ];
   };
 
@@ -598,6 +610,7 @@ in
       { subdomain = "git";       port = 1134; }   # Forgejo
       { subdomain = "lovefield"; port = config.services.homepage-dashboard.listenPort; internalOnly = true; }  # Homepage dashboard
       { subdomain = "share";     port = config.services.projectsend.port; }  # ProjectSend (public — see services.projectsend above)
+      { subdomain = "pcktnz";    port = config.services.pcktnz-web.port; internalOnly = true; }  # pcktnz-web dev site
     ];
   };
 
