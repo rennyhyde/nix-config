@@ -515,10 +515,13 @@ in
     # Skipped (not failed) until config.yaml has been created (see above).
     unitConfig.ConditionPathExists = "/var/lib/forgejo-runner/config.yaml";
     # What deploy/lovefield.sh needs: git, git-lfs, nix, plus the basics.
-    # systemctl and sudo come from the system profile / setuid wrappers.
+    # systemctl comes from the system profile. /run/wrappers must come first:
+    # the setuid sudo lives there, and the copy in the system profile is not
+    # setuid ("must be owned by uid 0 and have the setuid bit set").
     path = with pkgs; [
+      "/run/wrappers"
       bash coreutils gnused gawk curl nodejs gitMinimal git-lfs config.nix.package
-      "/run/current-system/sw" "/run/wrappers"
+      "/run/current-system/sw"
     ];
     environment.HOME = "/var/lib/forgejo-runner";
     serviceConfig = {
