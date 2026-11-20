@@ -311,7 +311,7 @@ Uploaded files live at `/mnt/storage/projectsend/storage`; MySQL data at `/mnt/s
 The `appImageTag`/`mysqlImageTag`/`redisImageTag` options are pinned explicitly (not `:latest`) for controlled upgrades. Check ProjectSend's `UPDATE.md` before bumping `appImageTag` — v2 is a from-scratch rewrite (Laravel-based) of the older PHP app, so major version jumps may need a real migration path, not just a tag bump.
 
 ## pcktnz-web (dev site)
-Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deployment**: `services.pcktnz-web` (`modules/services/pcktnz-web/`) only runs a binary that is built by hand from a git checkout in `/srv/pcktnz-web`, and Caddy serves it at `https://pcktnz.audioboss.win`. It is `internalOnly` and deliberately absent from `cloudflare-dyndns.domains`, so only LAN/VPN clients can resolve and reach it (same pattern as Immich). Listens on `127.0.0.1:3100` (3000 is AdGuard's web UI). Runs as a `DynamicUser`; SQLite db and the resized-image cache live in `/var/lib/pcktnz-web/`, the checkout is read-only to the service.
+Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deployment**: `services.pcktnz-web` (`modules/services/pcktnz-web/`) only runs a binary that is built by hand from a git checkout in `/srv/pcktnz-web`, and Caddy serves it at `https://pcktnz.audioboss.win`. It is a **public feedback preview behind HTTP basic auth**: LAN/VPN clients get straight in, WAN clients must enter the shared `preview` password (Caddy `basicAuth` on the expose entry; the hostname is in `cloudflare-dyndns.domains` so WAN can resolve it). Don't drop the password without adding rate limiting first: chat and the email signup accept anything, so an open instance gets spammed. Listens on `127.0.0.1:3100` (3000 is AdGuard's web UI). Runs as a `DynamicUser`; SQLite db and the resized-image cache live in `/var/lib/pcktnz-web/`, the checkout is read-only to the service.
 
 ### First Time Setup
 1. Rebuild lovefield (`rebuild`). This creates `/srv/pcktnz-web` (owned by galac) and the unit, which stays inactive until a binary exists — no failure in the meantime.
@@ -326,7 +326,16 @@ Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deploy
    cd /srv/pcktnz-web && nix develop -c cargo leptos build --release
    sudo systemctl restart pcktnz-web
    ```
-4. Visit `https://pcktnz.audioboss.win` from the LAN or over WireGuard. `journalctl -u pcktnz-web -f` for logs (any `SendWrapper`/panic line is an SSR bug, see the site's CLAUDE.md).
+4. Visit `https://pcktnz.audioboss.win`: no prompt from the LAN or over WireGuard, a password prompt from anywhere else. `journalctl -u pcktnz-web -f` for logs (any `SendWrapper`/panic line is an SSR bug, see the site's CLAUDE.md).
+
+### Preview password
+Set, rotate, or revoke: generate a new hash on lovefield, paste it into the `pcktnz` entry of `services.caddy-server.expose` in `configuration.nix`, commit, and rebuild. The old password stops working right away.
+```sh
+nix run nixpkgs#caddy -- hash-password   # prompts; caddy isn't on $PATH, the service runs it from the store
+```
+The build refuses anything that isn't a bcrypt hash (including the `REPLACE_WITH_BCRYPT_HASH` placeholder), because a bad hash would fail Caddy's whole config and take every vhost down. RSS readers can't answer a password prompt; testers can subscribe to `https://preview:<pw>@pcktnz.audioboss.win/blog/rss.xml`.
+
+The chat and signup data from the preview is disposable: wipe it before the real launch with `sudo systemctl stop pcktnz-web && sudo rm /var/lib/private/pcktnz-web/site.db && sudo systemctl start pcktnz-web` (the schema is recreated on start).
 
 ### Updating
 `cd /srv/pcktnz-web && ./deploy/lovefield.sh` — pull, `git lfs pull`, release build, restart. `--no-pull` rebuilds local edits.
@@ -349,8 +358,8 @@ sudo systemctl restart forgejo-runner-lovefield
 ### Gotchas
 - `wasm-bindgen-cli` in the repo's `flake.nix` must match `wasm-bindgen` in `Cargo.lock` exactly. If a `cargo update` bumps it and the build fails with a schema/version mismatch, change the `wasm-bindgen-cli_0_2_NNN` attribute in `flake.nix` (nixpkgs ships one package per version).
 - The COURSEWORK installation only works if `content/coursework` was pulled (LFS) — otherwise it shows an empty manifest.
-- The chat WebSocket goes through Caddy as `wss://pcktnz.audioboss.win/ws`; no extra Caddy config needed.
-- `SITE_URL` in the site's `server/src/rss.rs` is still a placeholder, so RSS links won't point at this hostname.
+- The chat WebSocket goes through Caddy as `wss://pcktnz.audioboss.win/ws`; no extra Caddy config needed. Browsers resend the basic-auth credentials on that same-origin upgrade.
+- RSS links come from `SITE_URL`, which the module sets from `services.pcktnz-web.siteUrl` (default `https://pcktnz.audioboss.win`).
 
 ## Samba
 LAN/VPN-only file shares (`services.samba`, built-in nixpkgs module), one private share per user — not group-shared like the storage runbook's `media` dataset. Not proxied through Caddy (SMB isn't HTTP; port 445 is opened directly in the firewall) and kept internal by binding only to `lo`/`enp3s0`/`wg0` (`bind interfaces only = yes`), on top of the router never forwarding 445. `nmbd` (legacy NetBIOS) and `winbindd` (AD/domain) are both disabled — SMB2+ only, which is all modern macOS/Windows need.

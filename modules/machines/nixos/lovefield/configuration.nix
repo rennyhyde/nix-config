@@ -79,7 +79,7 @@ in
     ../../../services/wireguard-netns # isolated netns for the Proton VPN tunnel
     ../../../services/qbittorrent-vpn # qBittorrent, confined to that netns
     ../../../services/projectsend     # large-file sharing for external partners
-    ../../../services/pcktnz-web      # personal site, dev deployment (VPN/LAN-only)
+    ../../../services/pcktnz-web      # personal site, dev deployment (public preview behind basic auth)
   ];
 
   networking.hostName = "lovefield";
@@ -188,9 +188,10 @@ in
   services.hello-world.enable = true;
 
   # pcktnz-web dev server: built by hand from /srv/pcktnz-web (see the module
-  # header and readme.md). Served at pcktnz.audioboss.win, internalOnly, and
-  # deliberately NOT in cloudflare-dyndns.domains — LAN/VPN clients resolve it
-  # through AdGuard's *.audioboss.win rewrite, WAN clients never see it.
+  # header and readme.md). Served at pcktnz.audioboss.win as a feedback
+  # preview: LAN/VPN clients get straight in, everyone else needs the shared
+  # basic-auth password (see the caddy-server expose entry), which keeps the
+  # unauthenticated chat and signup form away from spambots.
   services.pcktnz-web.enable = true;
 
   services.syncthing-users = {
@@ -216,6 +217,7 @@ in
     "paper.audioboss.win"
     "lovefield.audioboss.win"
     "share.audioboss.win"
+    "pcktnz.audioboss.win"  # public preview, password-protected for WAN clients
   ];
 
   # AdGuard Home — network-wide DNS resolver with ad blocking.
@@ -626,7 +628,7 @@ in
       }
       {
         Dev = [
-          { "pcktnz-web" = { href = "https://pcktnz.audioboss.win"; description = "Personal site (dev)"; }; }
+          { "pcktnz-web" = { href = "https://pcktnz.audioboss.win"; description = "Personal site (public preview, password for WAN)"; }; }
         ];
       }
     ];
@@ -674,7 +676,14 @@ in
       { subdomain = "git";       port = 1134; }   # Forgejo
       { subdomain = "lovefield"; port = config.services.homepage-dashboard.listenPort; internalOnly = true; }  # Homepage dashboard
       { subdomain = "share";     port = config.services.projectsend.port; }  # ProjectSend (public — see services.projectsend above)
-      { subdomain = "pcktnz";    port = config.services.pcktnz-web.port; internalOnly = true; }  # pcktnz-web dev site
+      # pcktnz-web dev site: public preview, WAN clients need this password.
+      # Generate the hash on lovefield (rotate/revoke = new hash + rebuild):
+      #   nix run nixpkgs#caddy -- hash-password
+      {
+        subdomain = "pcktnz";
+        port      = config.services.pcktnz-web.port;
+        basicAuth = { user = "preview"; hash = "$2a$14$AGwcHoyVwqXKESgFibaE/.80xEbbpXyDIG61V4AAT.mlvmYOBoPWS"; };
+      }
     ];
   };
 

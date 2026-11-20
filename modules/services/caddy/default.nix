@@ -18,6 +18,7 @@ in {
   #     expose = [
   #       { subdomain = "sync";  port = 8384; internalOnly = true; }
   #       { subdomain = "music"; port = 4533; }
+  #       { subdomain = "beta";  port = 3100; basicAuth = { user = "preview"; hash = "$2a$14$..."; }; }
   #     ];
   #   };
 
@@ -65,6 +66,19 @@ in {
             default = false;
             description = "Restrict to vpnSubnet/lanSubnet; all other requests get 403.";
           };
+          basicAuth = lib.mkOption {
+            type = lib.types.nullOr (lib.types.submodule {
+              options = {
+                user = lib.mkOption { type = lib.types.str; };
+                hash = lib.mkOption {
+                  type        = lib.types.str;
+                  description = "bcrypt hash, from `nix run nixpkgs#caddy -- hash-password`.";
+                };
+              };
+            });
+            default     = null;
+            description = "Require HTTP basic auth from clients outside vpnSubnet/lanSubnet; internal clients get in without it.";
+          };
         };
       });
       default     = [];
@@ -78,7 +92,22 @@ in {
       assertion = !(builtins.any (svc: svc.internalOnly) cfg.expose)
                   || cfg.vpnSubnet != null || cfg.lanSubnet != null;
       message   = "services.caddy-server.vpnSubnet or lanSubnet must be set when any expose entry has internalOnly = true";
-    }];
+    }] ++ lib.concatMap (svc: lib.optionals (svc.basicAuth != null) [
+      {
+        assertion = !svc.internalOnly;
+        message   = "services.caddy-server.expose.${svc.subdomain}: internalOnly and basicAuth are mutually exclusive";
+      }
+      {
+        assertion = cfg.vpnSubnet != null || cfg.lanSubnet != null;
+        message   = "services.caddy-server.vpnSubnet or lanSubnet must be set when any expose entry has basicAuth";
+      }
+      {
+        # A malformed hash fails Caddy's config load, taking every vhost down
+        # with it — catch it (and an unreplaced placeholder) at build time.
+        assertion = lib.hasPrefix "$2" svc.basicAuth.hash;
+        message   = "services.caddy-server.expose.${svc.subdomain}: basicAuth.hash must be a bcrypt hash (generate with `nix run nixpkgs#caddy -- hash-password`)";
+      }
+    ]) cfg.expose;
 
     # Build the ACME environment file from the bare token file.
     # CF_DNS_API_TOKEN_FILE tells lego to read the token from a file,
@@ -152,6 +181,19 @@ in {
                   }
                   handle {
                     respond "Internal network required" 403
+                  }
+                }
+              '' else if svc.basicAuth != null then ''
+                route {
+                  @internal remote_ip ${lib.concatStringsSep " " internalSubnets}
+                  handle @internal {
+                    ${proxy}
+                  }
+                  handle {
+                    basic_auth {
+                      ${svc.basicAuth.user} ${svc.basicAuth.hash}
+                    }
+                    ${proxy}
                   }
                 }
               '' else proxy;

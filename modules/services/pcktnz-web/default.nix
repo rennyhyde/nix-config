@@ -7,8 +7,11 @@ in {
   #
   # This is a DEV deployment: the binary is built by hand on lovefield from a
   # git checkout (not by Nix), and this module only runs it and puts it behind
-  # Caddy. It is meant to be LAN/VPN-only — expose it with internalOnly and do
-  # NOT add its hostname to services.cloudflare-dyndns.domains.
+  # Caddy. It is a feedback preview, not the production site: expose it either
+  # internalOnly (LAN/VPN-only) or with basicAuth (public, shared password).
+  # Never expose it with neither — chat and the email signup have no rate
+  # limiting yet, so an open instance is a spam target. With basicAuth, also
+  # add its hostname to services.cloudflare-dyndns.domains so WAN can resolve it.
   #
   # One-time setup on lovefield (full runbook: lovefield readme.md, "pcktnz-web"):
   #   git clone https://git.audioboss.win/galac/pcktnz-web <srcDir>   # as galac
@@ -24,6 +27,7 @@ in {
   #   services.pcktnz-web.enable = true;
   #   services.caddy-server.expose = [
   #     { subdomain = "pcktnz"; port = config.services.pcktnz-web.port; internalOnly = true; }
+  #     # or, public:  basicAuth = { user = "preview"; hash = "$2a$14$..."; };
   #   ];
 
   options.services.pcktnz-web = {
@@ -43,6 +47,12 @@ in {
         normal user. The service reads target/release/server, target/site/,
         content/ from here.
       '';
+    };
+
+    siteUrl = lib.mkOption {
+      type        = lib.types.str;
+      default     = "https://pcktnz.audioboss.win";
+      description = "Public base URL (no trailing slash), passed as SITE_URL; the RSS feed builds its links from it.";
     };
 
     owner = lib.mkOption {
@@ -84,6 +94,7 @@ in {
         COURSEWORK_DIR      = "${cfg.srcDir}/content/coursework";
         DATABASE_URL        = "sqlite:///var/lib/pcktnz-web/site.db?mode=rwc";
         MEDIA_CACHE_DIR     = "/var/lib/pcktnz-web/media-cache";
+        SITE_URL            = cfg.siteUrl;
         RUST_LOG            = "info";
       };
 
