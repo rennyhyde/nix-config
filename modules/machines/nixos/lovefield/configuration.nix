@@ -682,7 +682,7 @@ in
       {
         subdomain = "pcktnz";
         port      = config.services.pcktnz-web.port;
-        basicAuth = { user = "preview"; hash = "$2a$14$pDzoGvPti0ZQ2U.g9TqUIeU2wGS.4dGyF7xSvk6BX5udjBIvaWDWK"; };
+        basicAuth = { user = "preview"; hash = "$2a$14$zV06hxY8jAmKEDw6emPXuu4tIgpUHuMlEJdUPvL/SR9TT4Hp8cnTy"; };
       }
     ];
   };
