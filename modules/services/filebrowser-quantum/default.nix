@@ -17,8 +17,9 @@ let
       port              = cfg.port;
       baseURL           = "/";
       externalUrl       = cfg.externalUrl;  # used to build share links
+      # Safe to trust unconditionally: the loopback bind means Caddy is the
+      # only possible client. (2.0 stable has no trustedProxies allowlist.)
       trustProxyHeaders = true;
-      trustedProxies    = [ "127.0.0.1/32" "::1/128" ];
     };
     server = {
       cacheDir = "${stateDir}/cache";
@@ -45,11 +46,15 @@ let
         };
       }];
     };
-    auth.methods.password = {
-      enabled       = true;
+    # Key layout follows the v2.0.2-stable config.generated.yaml (main has
+    # moved adminUsername under methods.password; 2.0 rejects it there).
+    auth = {
       adminUsername = cfg.adminUsername;
-      minLength     = 10;
-      signup        = false;  # accounts are created by the admin
+      methods.password = {
+        enabled   = true;
+        minLength = 10;
+        signup    = false;  # accounts are created by the admin
+      };
     };
     # Let every user create share links (password/expiry/upload-only).
     userDefaults.account.permissions.share = true;
