@@ -146,6 +146,12 @@ in {
                   || cfg.vpnSubnet != null || cfg.lanSubnet != null;
       message   = "services.caddy-server.vpnSubnet or lanSubnet must be set when any expose entry has internalOnly = true";
     }] ++ map (svc: {
+      # Two hosts on one port means one of them silently proxies to the wrong
+      # service, possibly a public host onto an internal-only one.
+      assertion = builtins.length (builtins.filter (o: o.port == svc.port) cfg.expose) == 1;
+      message   = "services.caddy-server.expose.${svcHost svc}: port ${toString svc.port} is used by more than one expose entry";
+    }) cfg.expose
+    ++ map (svc: {
       assertion = svc.domain == null || svc.domain == cfg.domain || cfg.extraDomains ? ${svc.domain};
       message   = "services.caddy-server.expose.${svcHost svc}: domain must be services.caddy-server.domain or a key of extraDomains";
     }) cfg.expose

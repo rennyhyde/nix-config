@@ -101,7 +101,7 @@ in {
 
     port = lib.mkOption {
       type        = lib.types.port;
-      default     = 8082;
+      default     = 8087;  # 8082 is homepage-dashboard's default
       description = "Loopback port FileBrowser listens on. Point a reverse proxy here.";
     };
 
