@@ -79,6 +79,7 @@ in
     ../../../services/wireguard-netns # isolated netns for the Proton VPN tunnel
     ../../../services/qbittorrent-vpn # qBittorrent, confined to that netns
     ../../../services/projectsend     # large-file sharing for external partners
+    ../../../services/filebrowser-quantum # web file manager + share links (files.audioboss.win)
     ../../../services/pcktnz-web      # personal site, dev deployment (public preview behind basic auth)
   ];
 
@@ -222,6 +223,7 @@ in
     "paper.audioboss.win"
     "lovefield.audioboss.win"
     "share.audioboss.win"
+    "files.audioboss.win"   # FileBrowser Quantum
     "pcktnz.audioboss.win"  # old pcktnz-web address, now just redirects to pocketnoise.net
   ];
 
@@ -586,6 +588,21 @@ in
     # };
   };
 
+  # FileBrowser Quantum — Drive-style web file manager at
+  # https://files.audioboss.win. Public (users log in from anywhere, phones
+  # included; outside people get share links with password/expiry). Files are
+  # plain files under /mnt/storage/filebrowser/files, owned by the filebrowser
+  # group so galac/mir can also manage them from the shell. Secrets live at
+  # /etc/filebrowser/secrets.env — see modules/services/filebrowser-quantum.
+  services.filebrowser-quantum = {
+    enable        = true;
+    externalUrl   = "https://files.audioboss.win";
+    dataDir       = "/mnt/storage/filebrowser";
+    adminUsername = "galac";
+    title         = "lovefield files";
+  };
+  users.groups.filebrowser.members = [ "galac" "mir" ];
+
   # Homepage dashboard — landing page at lovefield.audioboss.win with links to
   # every service plus root/storage free space. VPN/LAN-only (see caddy expose
   # below): it surfaces disk stats and every internal service link, so it's
@@ -642,6 +659,7 @@ in
         Files = [
           { "Syncthing (galac)" = { href = "https://sync-galac.audioboss.win"; description = "File sync"; }; }
           { "Syncthing (mir)"   = { href = "https://sync-mir.audioboss.win";   description = "File sync"; }; }
+          { Files               = { href = "https://files.audioboss.win";     description = "FileBrowser: upload & share links"; }; }
           { ProjectSend         = { href = "https://share.audioboss.win";     description = "Share files with partners"; }; }
         ];
       }
@@ -697,6 +715,8 @@ in
       { subdomain = "git";       port = 1134; }   # Forgejo
       { subdomain = "lovefield"; port = config.services.homepage-dashboard.listenPort; internalOnly = true; }  # Homepage dashboard
       { subdomain = "share";     port = config.services.projectsend.port; }  # ProjectSend (public — see services.projectsend above)
+      # FileBrowser Quantum (public). Needs the real Host header for its cookies/URLs.
+      { subdomain = "files";     port = config.services.filebrowser-quantum.port; rewriteHost = false; }
       # pcktnz-web dev site: public preview, WAN clients need this password.
       # Generate the hash on lovefield (rotate/revoke = new hash + rebuild):
       #   nix run nixpkgs#caddy -- hash-password

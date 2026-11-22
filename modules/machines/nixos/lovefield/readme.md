@@ -79,6 +79,7 @@ The USB DAS uses a JMicron bridge that doesn't pass through each drive's real se
    sudo zfs create -o mountpoint=/mnt/storage/paperless       storage/paperless
    sudo zfs create -o mountpoint=/mnt/storage/navidrome       storage/navidrome
    sudo zfs create -o mountpoint=/mnt/storage/projectsend     storage/projectsend
+   sudo zfs create -o mountpoint=/mnt/storage/filebrowser     storage/filebrowser
    sudo chown galac:users /mnt/storage/syncthing/galac
    sudo chown mir:users   /mnt/storage/syncthing/mir
 
@@ -322,6 +323,34 @@ Uploaded files live at `/mnt/storage/projectsend/storage`; MySQL data at `/mnt/s
 
 ### Upgrading
 The `appImageTag`/`mysqlImageTag`/`redisImageTag` options are pinned explicitly (not `:latest`) for controlled upgrades. Check ProjectSend's `UPDATE.md` before bumping `appImageTag` — v2 is a from-scratch rewrite (Laravel-based) of the older PHP app, so major version jumps may need a real migration path, not just a tag bump.
+
+## FileBrowser Quantum
+Drive-style web file manager (`services.filebrowser-quantum`, custom module — `modules/services/filebrowser-quantum/`), one podman container from upstream's image. Users log in with a password (optional TOTP 2FA, set in Profile → Security) from any browser, phones included, and upload into the shared tree; outside people get share links with a password, expiry, download limit, or upload-only mode. Meant to replace ProjectSend.
+
+Reachable at `https://files.audioboss.win` from **anywhere** (in both `caddy-server.expose` and `cloudflare-dyndns.domains`). Its expose entry sets `rewriteHost = false`: FileBrowser needs the real Host header, unlike Syncthing.
+
+### First Time Setup
+1. Create the dataset: `sudo zfs create -o mountpoint=/mnt/storage/filebrowser storage/filebrowser`
+2. Create the secrets file (not in this repo):
+   ```bash
+   sudo mkdir -p /etc/filebrowser
+   sudo tee /etc/filebrowser/secrets.env >/dev/null <<EOF
+   FILEBROWSER_ADMIN_PASSWORD=<admin password, 10+ chars>
+   FILEBROWSER_JWT_TOKEN_SECRET=$(openssl rand -base64 32)
+   FILEBROWSER_TOTP_SECRET=$(openssl rand -base64 32)
+   EOF
+   sudo chmod 600 /etc/filebrowser/secrets.env
+   ```
+   `FILEBROWSER_ADMIN_PASSWORD` is re-applied on every container start, so changing it in the UI only lasts until the next restart. Remove the line after first login if you'd rather manage it in the UI. Never change `FILEBROWSER_TOTP_SECRET` once anyone has 2FA on: it locks them out.
+3. `rebuild`, then `systemctl status podman-filebrowser-quantum`.
+4. Log in at `https://files.audioboss.win` as `galac` and create an account for `mir` under Settings → Users. Everyone sees the whole tree by default (`defaultUserScope = "/"`); narrow a user's scope there if needed.
+
+### Storage and permissions
+Files live as plain files in `/mnt/storage/filebrowser/files`; the user db and thumbnail/archive cache in `/mnt/storage/filebrowser/state`. The container runs as the `filebrowser` system user (uid/gid 820), and `files/` is setgid with group-writable defaults, so `galac` and `mir` (members of the `filebrowser` group) can add, move, or delete files from the shell too. Files copied in from the shell should stay group-writable (`cp`/`rsync` into the tree, then `chmod -R g+rwX` if needed), or FileBrowser can't modify them. Bulk loads (for example the 400 GB set) are faster with `rsync` straight into `files/` than through the browser.
+
+### Gotchas
+- Downloading a folder as a zip is capped at 20 GB (`server.maxArchiveSize` default), and the archive is built in the cache first. For very large shares, recipients should download subfolders.
+- The image tag is pinned to the `2.0-stable` line (`imageTag` option); bump it deliberately.
 
 ## pcktnz-web (dev site)
 ### pocketnoise.net (separate Cloudflare account)

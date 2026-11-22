@@ -110,6 +110,15 @@ in {
             default = false;
             description = "Restrict to vpnSubnet/lanSubnet; all other requests get 403.";
           };
+          rewriteHost = lib.mkOption {
+            type        = lib.types.bool;
+            default     = true;
+            description = ''
+              Rewrite the upstream Host header to 127.0.0.1:<port> (needed by
+              services with a Host/CSRF check, e.g. Syncthing). Set false for
+              services that must see the public hostname (cookies, generated URLs).
+            '';
+          };
           basicAuth = lib.mkOption {
             type = lib.types.nullOr (lib.types.submodule {
               options = {
@@ -212,10 +221,12 @@ in {
           let
             # Rewrite Host to the upstream address so services that validate
             # the Host header (e.g. Syncthing CSRF check) accept the request.
-            proxy = ''
+            proxy = if svc.rewriteHost then ''
               reverse_proxy localhost:${toString svc.port} {
                 header_up Host "127.0.0.1:${toString svc.port}"
               }
+            '' else ''
+              reverse_proxy localhost:${toString svc.port}
             '';
             internalSubnets = builtins.filter (s: s != null) [ cfg.vpnSubnet cfg.lanSubnet ];
           in {
