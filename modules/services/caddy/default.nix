@@ -246,7 +246,14 @@ in {
               # for matched (internal) requests. Wrapping in `route {}` forces the directives
               # inside to run in the written order, and pairing `handle`/`handle` (rather than
               # `handle`/bare `respond`) is Caddy's documented mutual-exclusion idiom.
-              extraConfig = if svc.internalOnly then ''
+              #
+              # `encode` compresses responses (zstd for clients that accept it, else gzip).
+              # Caddy only compresses compressible types (HTML, CSS, JS, JSON, wasm, SVG…),
+              # so already-compressed media (video, images, audio) passes through untouched.
+              # Matters for WAN visitors, who are limited by the home upload: pcktnz-web's
+              # 2 MB wasm bundle shrinks to roughly a third. As a top-level directive it is
+              # sorted ahead of `route`, so it wraps every branch below.
+              extraConfig = "encode zstd gzip\n" + (if svc.internalOnly then ''
                 route {
                   @internal remote_ip ${lib.concatStringsSep " " internalSubnets}
                   handle @internal {
@@ -269,7 +276,7 @@ in {
                     ${proxy}
                   }
                 }
-              '' else proxy;
+              '' else proxy);
             };
           }
         ) cfg.expose);
