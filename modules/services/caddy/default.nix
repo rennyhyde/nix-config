@@ -18,9 +18,11 @@ let
 in {
   # Caddy reverse proxy with wildcard TLS via Cloudflare DNS challenge.
   #
-  # One-time setup on each machine:
-  #   sudo sh -c 'echo YOUR_CF_TOKEN > /etc/cloudflare/api-token && chmod 600 /etc/cloudflare/api-token'
-  # (Same token already used for DDNS — Zone:DNS:Edit + Zone:Read)
+  # One-time setup on each machine, before rebuilding:
+  #   sudo sh -c 'echo YOUR_CF_TOKEN > /etc/cloudflare/api-token'
+  # (Same token already used for DDNS — Zone:DNS:Edit + Zone:Read.)
+  # Activation then makes each token file acme-owned, mode 0600: lego runs as
+  # the acme user and fails with "permission denied" on a root-only token.
   #
   # Usage in a machine's configuration.nix:
   #   services.caddy-server = {
@@ -158,14 +160,22 @@ in {
     # Build the ACME environment file for each zone from its bare token file.
     # CF_DNS_API_TOKEN_FILE tells lego to read the token from a file,
     # so we can reuse the same secret created for DDNS.
-    system.activationScripts.cloudflare-acme-env = lib.concatStrings (lib.mapAttrsToList (domain: tokenFile: ''
+    # lego opens that file itself as the acme user, so the token must be
+    # readable by acme. Making acme the owner (rather than relying on group
+    # access) works regardless of the unit's Group=, which is the cert's group
+    # (caddy). DDNS is unaffected: it reads the token as root via LoadCredential.
+    # deps: the acme user must exist before the chown (fresh installs).
+    system.activationScripts.cloudflare-acme-env.deps = [ "users" ];
+    system.activationScripts.cloudflare-acme-env.text = lib.concatStrings (lib.mapAttrsToList (domain: tokenFile: ''
       if [ -f "${tokenFile}" ]; then
         mkdir -p /etc/cloudflare
         printf 'CF_DNS_API_TOKEN_FILE=%s\n' "${tokenFile}" > ${acmeEnvFile domain}
         chmod 600 ${acmeEnvFile domain}
+        chown acme:acme "${tokenFile}"
+        chmod 600 "${tokenFile}"
       else
         echo "caddy: WARNING: Cloudflare token for ${domain} not found at ${tokenFile}" >&2
-        echo "  sudo sh -c 'echo YOUR_TOKEN > ${tokenFile} && chmod 600 ${tokenFile}'" >&2
+        echo "  sudo sh -c 'echo YOUR_TOKEN > ${tokenFile}' && rebuild" >&2
       fi
     '') tokenFiles);
 

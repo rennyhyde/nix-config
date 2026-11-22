@@ -228,9 +228,22 @@ Two things that have to *both* be true for a public (non-`internalOnly`) subdoma
 
 ### Setup
 ```
-sudo sh -c 'echo YOUR_CF_TOKEN > /etc/cloudflare/api-token && chmod 600 /etc/cloudflare/api-token'
+sudo sh -c 'echo YOUR_CF_TOKEN > /etc/cloudflare/api-token'
 ```
 (Same Cloudflare token used for DDNS — needs `Zone:DNS:Edit` + `Zone:Read`.)
+
+On every rebuild, the module's activation script makes each zone's token file `acme:acme`, mode `0600`, no matter how it was created. The cert is ordered by lego running as the `acme` user, so a root-only token (`chmod 600` as root) fails with `open …: permission denied` and Caddy silently keeps serving a self-signed placeholder cert (Firefox then refuses the site outright because of HSTS).
+
+### Checking the cert
+Each cert has two units, and only one of them talks to Let's Encrypt:
+- `acme-<domain>` ("Ensure certificate") only creates a self-signed placeholder so Caddy can start. It always succeeds, so it says nothing about the real cert.
+- `acme-order-renew-<domain>` runs lego and gets the real cert. Check this one:
+  ```bash
+  systemctl status acme-order-renew-audioboss.win
+  journalctl -u acme-order-renew-audioboss.win -n 60 --no-pager
+  sudo systemctl restart acme-order-renew-audioboss.win   # retry after fixing the cause
+  ```
+To see which cert Caddy is serving: `curl -vI https://audioboss.win 2>&1 | grep -i issuer`. If the issuer is `minica`, it's the placeholder.
 
 ## Immich
 Self-hosted photo backup, running as podman containers via `virtualisation.oci-containers` (upstream's official images — nixpkgs' `immich` package trails releases, so it isn't used). Reachable at `https://photos.audioboss.win` from the LAN or VPN (Caddy's `internalOnly` on the `photos` expose entry rejects everything else); not in the `cloudflare-dyndns` domain list either, so it also has no public DNS record.
@@ -317,11 +330,11 @@ The `appImageTag`/`mysqlImageTag`/`redisImageTag` options are pinned explicitly 
 2. In that zone's DNS tab, create `A` records for `pocketnoise.net` and `www` (any IP, DNS only / grey cloud) if they don't exist yet; DDNS fixes the IP within 5 minutes.
 3. On lovefield:
    ```bash
-   sudo sh -c 'echo PASTE_TOKEN > /etc/cloudflare/pocketnoise-api-token && chmod 600 /etc/cloudflare/pocketnoise-api-token'
+   sudo sh -c 'echo PASTE_TOKEN > /etc/cloudflare/pocketnoise-api-token'
    rebuild
-   systemctl status cloudflare-dyndns-pocketnoise acme-pocketnoise.net   # both should have succeeded
+   systemctl status cloudflare-dyndns-pocketnoise acme-order-renew-pocketnoise.net   # both should have succeeded
    ```
-   If the token was missing at activation, rerun `rebuild` after adding it (the activation script writes `/etc/cloudflare/acme-env-pocketnoise.net` from it), then `sudo systemctl restart acme-pocketnoise.net`.
+   Check `acme-order-renew-pocketnoise.net`, not `acme-pocketnoise.net`. The latter only makes a self-signed placeholder and always succeeds (see Caddy → Checking the cert). If the token was missing at activation, rerun `rebuild` after adding it: the activation script writes `/etc/cloudflare/acme-env-pocketnoise.net` and makes the token acme-readable. Then run `sudo systemctl restart acme-order-renew-pocketnoise.net`.
 
 Personal site (Rust: Leptos SSR + wasm hydration on Axum), run as a **dev deployment**: `services.pcktnz-web` (`modules/services/pcktnz-web/`) only runs a binary that is built by hand from a git checkout in `/srv/pcktnz-web`, and Caddy serves it at `https://pocketnoise.net` (`www.` and the old `pcktnz.audioboss.win` redirect there). It is a **public feedback preview behind HTTP basic auth**: LAN/VPN clients get straight in, WAN clients must enter the shared `preview` password (Caddy `basicAuth` on the expose entry; the hostname is in `cloudflare-dyndns-zones.pocketnoise` so WAN can resolve it). Don't drop the password without adding rate limiting first: chat and the email signup accept anything, so an open instance gets spammed. Listens on `127.0.0.1:3100` (3000 is AdGuard's web UI). Runs as a `DynamicUser`; SQLite db and the resized-image cache live in `/var/lib/pcktnz-web/`, the checkout is read-only to the service.
 
