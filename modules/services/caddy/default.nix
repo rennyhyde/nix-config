@@ -1,6 +1,20 @@
 { config, lib, ... }:
 let
   cfg = config.services.caddy-server;
+
+  # Every zone Caddy serves: the primary `domain` plus `extraDomains`, each
+  # with its own Cloudflare token (zones can live in different CF accounts).
+  tokenFiles = { ${cfg.domain} = cfg.cloudflareTokenFile; }
+    // lib.mapAttrs (_: d: d.cloudflareTokenFile) cfg.extraDomains;
+  # Primary keeps its original path so existing machines don't churn.
+  acmeEnvFile = domain:
+    if domain == cfg.domain then "/etc/cloudflare/acme-env"
+    else "/etc/cloudflare/acme-env-${domain}";
+
+  svcDomain = svc: if svc.domain == null then cfg.domain else svc.domain;
+  svcHost   = svc:
+    if svc.subdomain == null then svcDomain svc
+    else "${svc.subdomain}.${svcDomain svc}";
 in {
   # Caddy reverse proxy with wildcard TLS via Cloudflare DNS challenge.
   #
@@ -19,7 +33,11 @@ in {
   #       { subdomain = "sync";  port = 8384; internalOnly = true; }
   #       { subdomain = "music"; port = 4533; }
   #       { subdomain = "beta";  port = 3100; basicAuth = { user = "preview"; hash = "$2a$14$..."; }; }
+  #       # A zone from extraDomains; subdomain = null serves the apex.
+  #       { domain = "example.net"; subdomain = null; port = 3200; }
   #     ];
+  #     # Extra zones get their own wildcard cert, issued with their own token.
+  #     extraDomains."example.net".cloudflareTokenFile = "/etc/cloudflare/example-net-api-token";
   #   };
 
   options.services.caddy-server = {
@@ -42,6 +60,22 @@ in {
       description = "Path to file containing the bare Cloudflare API token.";
     };
 
+    extraDomains = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule {
+        options.cloudflareTokenFile = lib.mkOption {
+          type        = lib.types.str;
+          description = "Path to file containing the bare Cloudflare API token for this zone.";
+        };
+      });
+      default     = {};
+      example     = { "example.net".cloudflareTokenFile = "/etc/cloudflare/example-net-api-token"; };
+      description = ''
+        Additional zones, each with its own wildcard cert (apex + *.zone). Use
+        a separate token per zone when the zones are in different Cloudflare
+        accounts. Expose entries pick a zone with their `domain` option.
+      '';
+    };
+
     vpnSubnet = lib.mkOption {
       type        = lib.types.nullOr lib.types.str;
       default     = null;
@@ -59,7 +93,15 @@ in {
     expose = lib.mkOption {
       type = lib.types.listOf (lib.types.submodule {
         options = {
-          subdomain    = lib.mkOption { type = lib.types.str; };
+          subdomain    = lib.mkOption {
+            type        = lib.types.nullOr lib.types.str;
+            description = "Subdomain to serve on; null serves the zone apex.";
+          };
+          domain       = lib.mkOption {
+            type        = lib.types.nullOr lib.types.str;
+            default     = null;
+            description = "Zone to serve on: null for `domain`, otherwise a key of `extraDomains`.";
+          };
           port         = lib.mkOption { type = lib.types.port; };
           internalOnly = lib.mkOption {
             type    = lib.types.bool;
@@ -82,7 +124,7 @@ in {
         };
       });
       default     = [];
-      description = "Services to proxy. Each entry creates <subdomain>.<domain> → localhost:<port>.";
+      description = "Services to proxy. Each entry creates <subdomain>.<domain> (or <domain> itself) → localhost:<port>.";
       example     = [ { subdomain = "sync"; port = 8384; internalOnly = true; } ];
     };
   };
@@ -92,10 +134,14 @@ in {
       assertion = !(builtins.any (svc: svc.internalOnly) cfg.expose)
                   || cfg.vpnSubnet != null || cfg.lanSubnet != null;
       message   = "services.caddy-server.vpnSubnet or lanSubnet must be set when any expose entry has internalOnly = true";
-    }] ++ lib.concatMap (svc: lib.optionals (svc.basicAuth != null) [
+    }] ++ map (svc: {
+      assertion = svc.domain == null || svc.domain == cfg.domain || cfg.extraDomains ? ${svc.domain};
+      message   = "services.caddy-server.expose.${svcHost svc}: domain must be services.caddy-server.domain or a key of extraDomains";
+    }) cfg.expose
+    ++ lib.concatMap (svc: lib.optionals (svc.basicAuth != null) [
       {
         assertion = !svc.internalOnly;
-        message   = "services.caddy-server.expose.${svc.subdomain}: internalOnly and basicAuth are mutually exclusive";
+        message   = "services.caddy-server.expose.${svcHost svc}: internalOnly and basicAuth are mutually exclusive";
       }
       {
         assertion = cfg.vpnSubnet != null || cfg.lanSubnet != null;
@@ -105,39 +151,39 @@ in {
         # A malformed hash fails Caddy's config load, taking every vhost down
         # with it — catch it (and an unreplaced placeholder) at build time.
         assertion = lib.hasPrefix "$2" svc.basicAuth.hash;
-        message   = "services.caddy-server.expose.${svc.subdomain}: basicAuth.hash must be a bcrypt hash (generate with `nix run nixpkgs#caddy -- hash-password`)";
+        message   = "services.caddy-server.expose.${svcHost svc}: basicAuth.hash must be a bcrypt hash (generate with `nix run nixpkgs#caddy -- hash-password`)";
       }
     ]) cfg.expose;
 
-    # Build the ACME environment file from the bare token file.
+    # Build the ACME environment file for each zone from its bare token file.
     # CF_DNS_API_TOKEN_FILE tells lego to read the token from a file,
     # so we can reuse the same secret created for DDNS.
-    system.activationScripts.cloudflare-acme-env = ''
-      if [ -f "${cfg.cloudflareTokenFile}" ]; then
+    system.activationScripts.cloudflare-acme-env = lib.concatStrings (lib.mapAttrsToList (domain: tokenFile: ''
+      if [ -f "${tokenFile}" ]; then
         mkdir -p /etc/cloudflare
-        printf 'CF_DNS_API_TOKEN_FILE=%s\n' "${cfg.cloudflareTokenFile}" > /etc/cloudflare/acme-env
-        chmod 600 /etc/cloudflare/acme-env
+        printf 'CF_DNS_API_TOKEN_FILE=%s\n' "${tokenFile}" > ${acmeEnvFile domain}
+        chmod 600 ${acmeEnvFile domain}
       else
-        echo "caddy: WARNING: Cloudflare token not found at ${cfg.cloudflareTokenFile}" >&2
-        echo "  sudo sh -c 'echo YOUR_TOKEN > ${cfg.cloudflareTokenFile} && chmod 600 ${cfg.cloudflareTokenFile}'" >&2
+        echo "caddy: WARNING: Cloudflare token for ${domain} not found at ${tokenFile}" >&2
+        echo "  sudo sh -c 'echo YOUR_TOKEN > ${tokenFile} && chmod 600 ${tokenFile}'" >&2
       fi
-    '';
+    '') tokenFiles);
 
-    # Wildcard cert — covers *.domain and domain itself.
+    # Wildcard cert per zone — covers *.domain and domain itself.
     # Uses DNS challenge so no port 80/443 exposure needed for renewal.
     security.acme = {
       acceptTerms = true;
       defaults.email = cfg.email;
-      certs."${cfg.domain}" = {
-        domain            = cfg.domain;
-        extraDomainNames  = [ "*.${cfg.domain}" ];
+      certs = lib.mapAttrs (domain: _: {
+        domain            = domain;
+        extraDomainNames  = [ "*.${domain}" ];
         dnsProvider       = "cloudflare";
-        environmentFile   = "/etc/cloudflare/acme-env";
+        environmentFile   = acmeEnvFile domain;
         group             = config.services.caddy.group;
         reloadServices    = [ "caddy.service" ];
         # Local resolver doesn't return SOA for external zones; force lego to use 8.8.8.8.
         extraLegoFlags    = [ "--dns.resolvers" "8.8.8.8:53" ];
-      };
+      }) tokenFiles;
     };
 
     services.caddy = {
@@ -146,11 +192,11 @@ in {
       globalConfig = "auto_https off";
 
       virtualHosts =
-        # HTTP → HTTPS redirects for apex and all subdomains
-        {
-          "http://${cfg.domain}".extraConfig   = "redir https://{host}{uri} permanent";
-          "http://*.${cfg.domain}".extraConfig = "redir https://{host}{uri} permanent";
-        }
+        # HTTP → HTTPS redirects for apex and all subdomains of every zone
+        lib.concatMapAttrs (domain: _: {
+          "http://${domain}".extraConfig   = "redir https://{host}{uri} permanent";
+          "http://*.${domain}".extraConfig = "redir https://{host}{uri} permanent";
+        }) tokenFiles
         # One HTTPS virtual host per exposed service
         // lib.listToAttrs (map (svc:
           let
@@ -163,9 +209,9 @@ in {
             '';
             internalSubnets = builtins.filter (s: s != null) [ cfg.vpnSubnet cfg.lanSubnet ];
           in {
-            name  = "${svc.subdomain}.${cfg.domain}";
+            name  = svcHost svc;
             value = {
-              useACMEHost = cfg.domain;
+              useACMEHost = svcDomain svc;
               # Caddyfile directives are NOT executed in the order they're written — Caddy
               # sorts them into its own fixed global order first. A bare `handle` next to a
               # bare `respond` at the top level is exactly the case where that reordering can

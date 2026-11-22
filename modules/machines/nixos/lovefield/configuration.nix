@@ -188,11 +188,16 @@ in
   services.hello-world.enable = true;
 
   # pcktnz-web dev server: built by hand from /srv/pcktnz-web (see the module
-  # header and readme.md). Served at pcktnz.audioboss.win as a feedback
-  # preview: LAN/VPN clients get straight in, everyone else needs the shared
-  # basic-auth password (see the caddy-server expose entry), which keeps the
-  # unauthenticated chat and signup form away from spambots.
-  services.pcktnz-web.enable = true;
+  # header and readme.md). Served at pocketnoise.net (a zone in a separate
+  # Cloudflare account, hence its own token — see caddy-server.extraDomains and
+  # cloudflare-dyndns-zones) as a feedback preview: LAN/VPN clients get straight
+  # in, everyone else needs the shared basic-auth password (see the
+  # caddy-server expose entry), which keeps the unauthenticated chat and signup
+  # form away from spambots.
+  services.pcktnz-web = {
+    enable  = true;
+    siteUrl = "https://pocketnoise.net";
+  };
 
   services.syncthing-users = {
     enable    = true;
@@ -217,8 +222,19 @@ in
     "paper.audioboss.win"
     "lovefield.audioboss.win"
     "share.audioboss.win"
-    "pcktnz.audioboss.win"  # public preview, password-protected for WAN clients
+    "pcktnz.audioboss.win"  # old pcktnz-web address, now just redirects to pocketnoise.net
   ];
+
+  # pocketnoise.net lives in a different Cloudflare account than audioboss.win,
+  # so it needs its own token (and its own DDNS unit, cloudflare-dyndns-pocketnoise).
+  # Same token is used by Caddy for the pocketnoise.net wildcard cert.
+  services.cloudflare-dyndns-zones.pocketnoise = {
+    apiTokenFile = "/etc/cloudflare/pocketnoise-api-token";
+    domains = [
+      "pocketnoise.net"      # pcktnz-web public preview, password-protected for WAN clients
+      "www.pocketnoise.net"  # redirects to the apex
+    ];
+  };
 
   # AdGuard Home — network-wide DNS resolver with ad blocking.
   # Listens on all interfaces: LAN clients (10.0.0.5:53) and VPN clients (10.134.0.1:53).
@@ -258,6 +274,9 @@ in
           # packets on enp3s0 even though 10.134.0.1 belongs to wg0.
           { domain = "audioboss.win"; answer = "10.134.0.1"; enabled = true;}
           { domain = "*.audioboss.win"; answer = "10.134.0.1"; enabled = true;}
+          # Same for pocketnoise.net, so LAN/VPN clients skip pcktnz-web's basic auth.
+          { domain = "pocketnoise.net"; answer = "10.134.0.1"; enabled = true;}
+          { domain = "*.pocketnoise.net"; answer = "10.134.0.1"; enabled = true;}
         ];
       };
       # Firefox (and some Chrome configs) default to DNS-over-HTTPS, which bypasses
@@ -628,7 +647,7 @@ in
       }
       {
         Dev = [
-          { "pcktnz-web" = { href = "https://pcktnz.audioboss.win"; description = "Personal site (public preview, password for WAN)"; }; }
+          { "pcktnz-web" = { href = "https://pocketnoise.net"; description = "Personal site (public preview, password for WAN)"; }; }
         ];
       }
     ];
@@ -664,6 +683,8 @@ in
     email     = "outpost-admin@proton.me";
     vpnSubnet = "10.134.0.0/24";
     lanSubnet = "10.0.0.0/24";
+    # Separate Cloudflare account from audioboss.win, so a separate token.
+    extraDomains."pocketnoise.net".cloudflareTokenFile = "/etc/cloudflare/pocketnoise-api-token";
     expose = [
       { subdomain = "sync-galac"; port = 8384; internalOnly = true;}  # Syncthing (galac)
       { subdomain = "sync-mir";   port = 8385; internalOnly = true;}  # Syncthing (mir)
@@ -680,11 +701,25 @@ in
       # Generate the hash on lovefield (rotate/revoke = new hash + rebuild):
       #   nix run nixpkgs#caddy -- hash-password
       {
-        subdomain = "pcktnz";
+        domain    = "pocketnoise.net";
+        subdomain = null;  # apex
         port      = config.services.pcktnz-web.port;
         basicAuth = { user = "preview"; hash = "$2a$14$zV06hxY8jAmKEDw6emPXuu4tIgpUHuMlEJdUPvL/SR9TT4Hp8cnTy"; };
       }
     ];
+  };
+
+  # Redirects onto the pcktnz-web apex: www, and the site's old audioboss.win
+  # address (drop that one, and its cloudflare-dyndns entry, once nobody uses it).
+  services.caddy.virtualHosts = {
+    "www.pocketnoise.net" = {
+      useACMEHost = "pocketnoise.net";
+      extraConfig = "redir https://pocketnoise.net{uri} permanent";
+    };
+    "pcktnz.audioboss.win" = {
+      useACMEHost = "audioboss.win";
+      extraConfig = "redir https://pocketnoise.net{uri} permanent";
+    };
   };
 
   # Declaring this (rather than the manual `groupadd media` from the storage

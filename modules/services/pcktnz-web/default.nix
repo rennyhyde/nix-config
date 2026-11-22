@@ -26,7 +26,7 @@ in {
   # Usage in a machine's configuration.nix:
   #   services.pcktnz-web.enable = true;
   #   services.caddy-server.expose = [
-  #     { subdomain = "pcktnz"; port = config.services.pcktnz-web.port; internalOnly = true; }
+  #     { domain = "pocketnoise.net"; subdomain = null; port = config.services.pcktnz-web.port; internalOnly = true; }
   #     # or, public:  basicAuth = { user = "preview"; hash = "$2a$14$..."; };
   #   ];
 
@@ -51,7 +51,7 @@ in {
 
     siteUrl = lib.mkOption {
       type        = lib.types.str;
-      default     = "https://pcktnz.audioboss.win";
+      default     = "https://pocketnoise.net";
       description = "Public base URL (no trailing slash), passed as SITE_URL; the RSS feed builds its links from it.";
     };
 
