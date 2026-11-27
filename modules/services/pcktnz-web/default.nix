@@ -80,6 +80,11 @@ in {
       # Don't crash-loop before the first `cargo leptos build --release`.
       unitConfig.ConditionPathExists = "${cfg.srcDir}/target/release/server";
 
+      # ffmpeg/ffprobe: video sizes and the still frames used as video
+      # thumbnails/posters (run on demand, results cached in media-cache).
+      # The headless build skips the SDL/X/GUI libraries a server never needs.
+      path = [ pkgs.ffmpeg-headless ];
+
       # No Cargo.toml metadata is read at runtime in a deployed binary, so the
       # leptos config comes from env vars (cargo-leptos sets the same ones
       # under `watch`). Everything the site writes (SQLite, resized images)
